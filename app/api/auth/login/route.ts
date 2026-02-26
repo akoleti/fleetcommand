@@ -10,6 +10,7 @@ import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma, handlePrismaError } from '@/lib/db'
 import { generateTokenPair, getRefreshTokenExpiryDate } from '@/lib/jwt'
+import { getLoginAttempts, incrementLoginAttempts, resetLoginAttempts } from '@/lib/redis'
 
 // Request validation schema
 const loginSchema = z.object({
@@ -35,6 +36,18 @@ export async function POST(request: NextRequest) {
     }
 
     const { email, password } = validationResult.data
+
+    // Check rate limiting (5 failed attempts)
+    const attempts = await getLoginAttempts(email)
+    if (attempts >= 5) {
+      return NextResponse.json(
+        { 
+          error: 'Too many failed login attempts. Please try again in 15 minutes.', 
+          code: 'RATE_LIMITED' 
+        },
+        { status: 429 }
+      )
+    }
 
     // Find user by email
     const user = await prisma.user.findUnique({
@@ -77,11 +90,17 @@ export async function POST(request: NextRequest) {
     const isValidPassword = await bcrypt.compare(password, user.passwordHash)
     
     if (!isValidPassword) {
+      // Increment failed login attempts
+      await incrementLoginAttempts(email)
+      
       return NextResponse.json(
         { error: 'Invalid email or password', code: 'INVALID_CREDENTIALS' },
         { status: 401 }
       )
     }
+
+    // Reset failed login attempts on successful login
+    await resetLoginAttempts(email)
 
     // Generate tokens
     const tokens = generateTokenPair({
