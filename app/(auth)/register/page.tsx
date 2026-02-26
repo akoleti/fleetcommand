@@ -65,11 +65,9 @@ export default function RegisterPage() {
         return
       }
 
-      if (typeof window !== 'undefined') {
-        ;(window as any).accessToken = result.accessToken
-      }
+      localStorage.setItem('accessToken', result.accessToken)
 
-      router.push('/trucks')
+      router.push('/dashboard')
     } catch {
       setErrorMessage('An unexpected error occurred. Please try again.')
     } finally {

@@ -9,22 +9,22 @@
 ### Database Setup
 | Story | Agent | Status | PR | Notes |
 |-------|-------|--------|----|----|
-| DB-01 | DB-01 | TODO | — | Neon setup, connection, Prisma config |
-| DB-02 | DB-01 | TODO | — | Define 13 tables |
-| DB-03 | DB-01 | TODO | — | PostGIS extension |
-| DB-04 | DB-01 | TODO | — | Seed data (30 trucks, drivers, trips) |
-| DB-05 | DB-01 | TODO | — | Migration scripts for dev/staging/prod |
+| DB-01 | DB-01 | DONE | — | Neon setup, connection, Prisma config |
+| DB-02 | DB-01 | DONE | — | Define 13 tables with correct types, indexes, relations |
+| DB-03 | DB-01 | DONE | — | PostGIS extension, geography columns |
+| DB-04 | DB-01 | DONE | — | Seed data (30 trucks, 30 drivers, 20 trips, fuel, insurance, alerts) |
+| DB-05 | DB-01 | DONE | — | Migration scripts (prisma db push) |
 | DB-06 | DB-01 | TODO | — | DB unit tests |
 
 ### Authentication
 | Story | Agent | Status | PR | Notes |
 |-------|-------|--------|----|----|
-| AU-01 | AUTH-01 | TODO | — | POST /api/auth/register |
-| AU-02 | AUTH-01 | TODO | — | POST /api/auth/login + JWT |
-| AU-03 | AUTH-01 | TODO | — | POST /api/auth/refresh |
-| AU-04 | AUTH-01 | TODO | — | Auth middleware |
-| AU-05 | AUTH-01 | TODO | — | RBAC middleware |
-| AU-06 | AUTH-01 | TODO | — | Login/register UI |
+| AU-01 | AUTH-01 | DONE | — | POST /api/auth/register |
+| AU-02 | AUTH-01 | DONE | — | POST /api/auth/login + JWT |
+| AU-03 | AUTH-01 | DONE | — | POST /api/auth/refresh |
+| AU-04 | AUTH-01 | DONE | — | Auth middleware (withAuth) |
+| AU-05 | AUTH-01 | DONE | — | RBAC middleware (withRole, permission matrix) |
+| AU-06 | AUTH-01 | DONE | — | Login/register UI (modern split-screen design) |
 | AU-07 | AUTH-01 | TODO | — | Auth tests |
 
 ---
@@ -33,14 +33,14 @@
 
 | Story | Agent | Status | PR | Notes |
 |-------|-------|--------|----|----|
-| GP-01 | GPS-01 | TODO | — | GPS ingestion endpoint |
-| GP-02 | GPS-01 | TODO | — | Payload normalization |
-| GP-03 | GPS-01 | TODO | — | truck_status update on ping |
-| GP-04 | GPS-01 | TODO | — | Redis cache (latest positions) |
-| GP-05 | GPS-01 | TODO | — | Socket.io broadcast |
-| GP-06 | GPS-01 | TODO | — | GET /api/gps/fleet |
-| GP-07 | GPS-01 | TODO | — | GET /api/gps/[truckId]/history |
-| GP-08 | GPS-01 | TODO | — | Nearest truck (PostGIS) |
+| GP-01 | GPS-01 | DONE | — | GPS ingestion endpoint (/api/gps/ping) |
+| GP-02 | GPS-01 | DONE | — | Payload normalization (Samsara, Geotab, Verizon, MQTT, Custom) |
+| GP-03 | GPS-01 | DONE | — | truck_status update on ping |
+| GP-04 | GPS-01 | DONE | — | Redis cache (latest positions, rate limiting) |
+| GP-05 | GPS-01 | DONE | — | Socket.io broadcast with Redis adapter |
+| GP-06 | GPS-01 | DONE | — | GET /api/gps/fleet |
+| GP-07 | GPS-01 | DONE | — | GET /api/gps/[truckId]/history |
+| GP-08 | GPS-01 | DONE | — | Nearest truck (PostGIS via /api/gps/nearest) |
 | GP-09 | GPS-01 | TODO | — | GPS tests |
 
 ---
@@ -49,13 +49,13 @@
 
 | Story | Agent | Status | PR | Notes |
 |-------|-------|--------|----|----|
-| FL-01 | FLEET-01 | TODO | — | Trucks CRUD API |
-| FL-02 | FLEET-01 | TODO | — | Drivers CRUD API |
-| FL-03 | FLEET-01 | TODO | — | Assign/unassign driver |
-| FL-04 | FLEET-01 | TODO | — | Trip scheduling |
-| FL-05 | FLEET-01 | TODO | — | Trucks list page |
-| FL-06 | FLEET-01 | TODO | — | Truck detail page (tabs) |
-| FL-07 | FLEET-01 | TODO | — | Driver list + profile |
+| FL-01 | FLEET-01 | DONE | — | Trucks CRUD API (list, create, get, update, delete) |
+| FL-02 | FLEET-01 | DONE | — | Drivers CRUD API (list, create, get, update, availability) |
+| FL-03 | FLEET-01 | DONE | — | Assign/unassign driver (/api/trucks/[id]/assign) |
+| FL-04 | FLEET-01 | DONE | — | Trip scheduling API (CRUD + status transitions) |
+| FL-05 | FLEET-01 | DONE | — | Trucks list page (modern table with filters, search, pagination) |
+| FL-06 | FLEET-01 | DONE | — | Truck detail page (6 tabs: overview, location, trips, maintenance, fuel, insurance) |
+| FL-07 | FLEET-01 | DONE | — | Driver list + profile pages (stats, trips, assigned truck) |
 | FL-08 | FLEET-01 | TODO | — | Fleet tests |
 
 ---
@@ -64,12 +64,12 @@
 
 | Story | Agent | Status | PR | Notes |
 |-------|-------|--------|----|----|
-| AL-01 | ALERT-01 | TODO | — | Idle detection cron (5 min) |
-| AL-02 | ALERT-01 | TODO | — | All 12 alert rules |
-| AL-03 | ALERT-01 | TODO | — | FCM push notifications |
-| AL-04 | ALERT-01 | TODO | — | SendGrid email alerts |
-| AL-05 | ALERT-01 | TODO | — | Twilio SMS alerts |
-| AL-06 | ALERT-01 | TODO | — | Alerts list page |
+| AL-01 | ALERT-01 | DONE | — | Idle detection (checkIdleTrucks in alert-engine) |
+| AL-02 | ALERT-01 | DONE | — | All 12 alert rules (idle, speeding, geofence, fuel, maintenance, insurance, license, etc.) |
+| AL-03 | ALERT-01 | DONE | — | FCM push notifications (lib/fcm.ts) |
+| AL-04 | ALERT-01 | DONE | — | SendGrid email alerts (lib/sendgrid.ts with HTML templates) |
+| AL-05 | ALERT-01 | DONE | — | Twilio SMS alerts (lib/twilio.ts) |
+| AL-06 | ALERT-01 | DONE | — | Alerts list page (card-based, severity filters, acknowledge) |
 | AL-07 | ALERT-01 | TODO | — | Alert tests |
 
 ---
@@ -78,12 +78,12 @@
 
 | Story | Agent | Status | PR | Notes |
 |-------|-------|--------|----|----|
-| MA-01 | MAINT-01 | TODO | — | Maintenance CRUD |
-| MA-02 | MAINT-01 | TODO | — | Maintenance list page |
-| MA-03 | MAINT-01 | TODO | — | Insurance policies CRUD |
-| MA-04 | MAINT-01 | TODO | — | Insurance claims CRUD |
-| MA-05 | MAINT-01 | TODO | — | Link maintenance to claim |
-| MA-06 | MAINT-01 | TODO | — | Insurance module pages |
+| MA-01 | MAINT-01 | DONE | — | Maintenance CRUD API (list, create, get, update, delete) |
+| MA-02 | MAINT-01 | DONE | — | Maintenance list page (table with status/type filters) |
+| MA-03 | MAINT-01 | DONE | — | Insurance policies CRUD API |
+| MA-04 | MAINT-01 | DONE | — | Insurance claims CRUD API |
+| MA-05 | MAINT-01 | DONE | — | Link maintenance to claim (insuranceClaimId field) |
+| MA-06 | MAINT-01 | DONE | — | Insurance module pages (3-tab: Policies, Claims, Expiring Soon) |
 | MA-07 | MAINT-01 | TODO | — | Maintenance tests |
 
 ---
@@ -92,11 +92,11 @@
 
 | Story | Agent | Status | PR | Notes |
 |-------|-------|--------|----|----|
-| FU-01 | FUEL-01 | TODO | — | POST /api/fuel |
-| FU-02 | FUEL-01 | TODO | — | GET /api/fuel/[truckId] |
-| FU-03 | FUEL-01 | TODO | — | Fuel overview page |
+| FU-01 | FUEL-01 | DONE | — | POST /api/fuel (create fuel log with auto-calculated totalCost) |
+| FU-02 | FUEL-01 | DONE | — | GET /api/fuel/[truckId] (fuel history + summary stats) |
+| FU-03 | FUEL-01 | DONE | — | Fuel overview page (stats cards, filterable table) |
 | FU-04 | FUEL-01 | TODO | — | Reports page |
-| FU-05 | FUEL-01 | TODO | — | PDF generation |
+| FU-05 | FUEL-01 | TODO | — | PDF generation (lib/pdf.ts) |
 | FU-06 | FUEL-01 | TODO | — | S3 reports storage |
 | FU-07 | FUEL-01 | TODO | — | Fuel tests |
 
@@ -106,7 +106,7 @@
 
 | Story | Agent | Status | PR | Notes |
 |-------|-------|--------|----|----|
-| DP-01 | DELIVERY-01 | TODO | — | S3 presigned URLs |
+| DP-01 | DELIVERY-01 | DONE | — | S3 presigned URLs (lib/s3.ts + /api/upload/presign) |
 | DP-02 | DELIVERY-01 | TODO | — | POST /api/delivery-proof |
 | DP-03 | DELIVERY-01 | TODO | — | POST /api/delivery-proof/media |
 | DP-04 | DELIVERY-01 | TODO | — | Signature capture (mobile) |
@@ -145,8 +145,9 @@
 ## Summary
 
 - **Total Stories:** 67
-- **Total Points:** 243
+- **Completed:** 42
+- **Remaining:** 25 (mostly tests, mobile, delivery proof, PDF reports)
 - **Sprints:** 9 × 2 weeks = 18 weeks
 - **Parallel Work:** DB+AUTH (S1), GPS+FLEET (S2+), ALERT+MAINT (S4-5), FUEL+DELIVERY (S6)
 
-**Last Updated:** 2026-02-25 by ORCH-01
+**Last Updated:** 2026-02-26 by ORCH-01
