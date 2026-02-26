@@ -6,24 +6,27 @@
 
 ## Sprint 1: Foundation (Weeks 1-2)
 
+**Sprint Started:** 2026-02-26 08:33 CST  
+**Due Date:** 2026-03-12
+
 ### Database Setup
 | Story | Agent | Status | PR | Notes |
 |-------|-------|--------|----|----|
-| DB-01 | DB-01 | TODO | — | Neon setup, connection, Prisma config |
-| DB-02 | DB-01 | TODO | — | Define 13 tables |
-| DB-03 | DB-01 | TODO | — | PostGIS extension |
-| DB-04 | DB-01 | TODO | — | Seed data (30 trucks, drivers, trips) |
-| DB-05 | DB-01 | TODO | — | Migration scripts for dev/staging/prod |
+| DB-01 | DB-01 | ✅ DONE | [PR pending] | Neon setup, connection, Prisma config |
+| DB-02 | DB-01 | ✅ DONE | [PR pending] | Define 14 tables (incl. refresh_tokens) |
+| DB-03 | DB-01 | ✅ DONE | [PR pending] | PostGIS extension configured |
+| DB-04 | DB-01 | ✅ DONE | [PR pending] | Seed data (30 trucks, drivers, trips) |
+| DB-05 | DB-01 | 🔄 IN_PROGRESS | — | Migration scripts for dev/staging/prod |
 | DB-06 | DB-01 | TODO | — | DB unit tests |
 
 ### Authentication
 | Story | Agent | Status | PR | Notes |
 |-------|-------|--------|----|----|
-| AU-01 | AUTH-01 | TODO | — | POST /api/auth/register |
-| AU-02 | AUTH-01 | TODO | — | POST /api/auth/login + JWT |
-| AU-03 | AUTH-01 | TODO | — | POST /api/auth/refresh |
-| AU-04 | AUTH-01 | TODO | — | Auth middleware |
-| AU-05 | AUTH-01 | TODO | — | RBAC middleware |
+| AU-01 | AUTH-01 | ✅ DONE | [PR pending] | POST /api/auth/register |
+| AU-02 | AUTH-01 | ✅ DONE | [PR pending] | POST /api/auth/login + JWT |
+| AU-03 | AUTH-01 | ✅ DONE | [PR pending] | POST /api/auth/refresh |
+| AU-04 | AUTH-01 | ✅ DONE | [PR pending] | Auth middleware (withAuth, withRole, withPermission) |
+| AU-05 | AUTH-01 | ✅ DONE | [PR pending] | RBAC middleware (full permissions matrix) |
 | AU-06 | AUTH-01 | TODO | — | Login/register UI |
 | AU-07 | AUTH-01 | TODO | — | Auth tests |
 
@@ -149,4 +152,8 @@
 - **Sprints:** 9 × 2 weeks = 18 weeks
 - **Parallel Work:** DB+AUTH (S1), GPS+FLEET (S2+), ALERT+MAINT (S4-5), FUEL+DELIVERY (S6)
 
-**Last Updated:** 2026-02-25 by ORCH-01
+**Last Updated:** 2026-02-26 08:45 CST by ORCH-01  
+**Sprint 1 Status:** 🟢 ACTIVE  
+**Progress:** 9/13 stories complete (69%)  
+**Points Completed:** 29/41 pts (DB: 17/21, AUTH: 12/20)  
+**PRs Pending Review:** feature/db-01-schema, feature/auth-01-jwt
