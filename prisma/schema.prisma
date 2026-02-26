@@ -1,0 +1,467 @@
+// FleetCommand Database Schema
+// Owner: DB-01
+// Last Updated: 2026-02-26
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgcrypto, postgis]
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum UserRole {
+  OWNER
+  MANAGER
+  DRIVER
+}
+
+enum TruckStatus {
+  ACTIVE
+  IDLE
+  MAINTENANCE
+  BLOCKED
+  INACTIVE
+}
+
+enum DriverStatus {
+  AVAILABLE
+  ON_TRIP
+  OFF_DUTY
+  SUSPENDED
+}
+
+enum TripStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AlertType {
+  IDLE_ALERT
+  SPEEDING
+  GEOFENCE_EXIT
+  GEOFENCE_ENTER
+  LOW_FUEL
+  MAINTENANCE_DUE
+  INSURANCE_EXPIRY_WARNING
+  INSURANCE_EXPIRY_CRITICAL
+  LICENSE_EXPIRY
+  ACCIDENT
+  SOS
+  UNAUTHORIZED_MOVEMENT
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum MaintenanceType {
+  OIL_CHANGE
+  TIRE_ROTATION
+  BRAKE_SERVICE
+  ENGINE_REPAIR
+  TRANSMISSION
+  ELECTRICAL
+  BODY_WORK
+  INSPECTION
+  OTHER
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ClaimStatus {
+  PENDING
+  APPROVED
+  DENIED
+  PAID
+}
+
+enum DeliveryMediaType {
+  SIGNATURE
+  PHOTO
+  DOCUMENT
+}
+
+// ============================================================================
+// CORE TABLES
+// ============================================================================
+
+model Organization {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              User[]
+  trucks             Truck[]
+  drivers            Driver[]
+  alerts             Alert[]
+  insurancePolicies  InsurancePolicy[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email          String       @unique
+  passwordHash   String
+  name           String
+  role           UserRole
+  organizationId String       @db.Uuid
+  fcmToken       String?
+  phone          String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  alerts       Alert[]      @relation("AlertUser")
+  refreshTokens RefreshToken[]
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token     String   @unique
+  userId    String   @db.Uuid
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+// ============================================================================
+// FLEET TABLES
+// ============================================================================
+
+model Truck {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String      @db.Uuid
+  vin             String      @unique
+  licensePlate    String
+  make            String
+  model           String
+  year            Int
+  status          TruckStatus @default(ACTIVE)
+  currentDriverId String?     @db.Uuid
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  currentDriver     Driver?            @relation("CurrentDriver", fields: [currentDriverId], references: [id])
+  truckStatus       TruckStatusRecord?
+  gpsLocations      GpsLocation[]
+  trips             Trip[]
+  alerts            Alert[]
+  maintenanceRecords Maintenance[]
+  fuelLogs          FuelLog[]
+  insurancePolicies InsurancePolicy[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([vin])
+  @@map("trucks")
+}
+
+model Driver {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @db.Uuid
+  userId         String?      @db.Uuid
+  name           String
+  licenseNumber  String
+  licenseExpiry  DateTime
+  phone          String
+  status         DriverStatus @default(AVAILABLE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  assignedTrucks Truck[]  @relation("CurrentDriver")
+  trips          Trip[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("drivers")
+}
+
+model TruckStatusRecord {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  truckId     String   @unique @db.Uuid
+  latitude    Float
+  longitude   Float
+  // PostGIS geography point for spatial queries
+  location    Unsupported("geography(Point, 4326)")?
+  speed       Float    @default(0)
+  heading     Float    @default(0)
+  fuelLevel   Float?
+  ignitionOn  Boolean  @default(false)
+  lastPingAt  DateTime
+  updatedAt   DateTime @updatedAt
+
+  truck Truck @relation(fields: [truckId], references: [id], onDelete: Cascade)
+
+  @@index([lastPingAt])
+  @@map("truck_status")
+}
+
+// ============================================================================
+// GPS & LOCATION
+// ============================================================================
+
+model GpsLocation {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  truckId    String   @db.Uuid
+  latitude   Float
+  longitude  Float
+  // PostGIS geography point for spatial queries
+  location   Unsupported("geography(Point, 4326)")?
+  speed      Float    @default(0)
+  heading    Float    @default(0)
+  fuelLevel  Float?
+  ignitionOn Boolean  @default(false)
+  timestamp  DateTime @default(now())
+
+  truck Truck @relation(fields: [truckId], references: [id], onDelete: Cascade)
+
+  @@index([truckId, timestamp(sort: Desc)])
+  @@index([timestamp])
+  @@map("gps_locations")
+}
+
+// ============================================================================
+// TRIPS & DELIVERY
+// ============================================================================
+
+model Trip {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  truckId         String     @db.Uuid
+  driverId        String     @db.Uuid
+  originAddress   String
+  originLat       Float
+  originLng       Float
+  destinationAddress String
+  destinationLat  Float
+  destinationLng  Float
+  scheduledStart  DateTime
+  scheduledEnd    DateTime?
+  actualStart     DateTime?
+  actualEnd       DateTime?
+  status          TripStatus @default(SCHEDULED)
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  truck          Truck          @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  driver         Driver         @relation(fields: [driverId], references: [id])
+  deliveryProofs DeliveryProof[]
+
+  @@index([truckId])
+  @@index([driverId])
+  @@index([status])
+  @@index([scheduledStart])
+  @@map("trips")
+}
+
+model DeliveryProof {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tripId        String   @db.Uuid
+  recipientName String
+  notes         String?
+  latitude      Float?
+  longitude     Float?
+  capturedAt    DateTime @default(now())
+  syncedAt      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  trip  Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  media DeliveryMedia[]
+
+  @@index([tripId])
+  @@map("delivery_proofs")
+}
+
+model DeliveryMedia {
+  id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proofId   String            @db.Uuid
+  type      DeliveryMediaType
+  s3Key     String
+  s3Bucket  String
+  mimeType  String?
+  fileSize  Int?
+  createdAt DateTime          @default(now())
+
+  proof DeliveryProof @relation(fields: [proofId], references: [id], onDelete: Cascade)
+
+  @@index([proofId])
+  @@map("delivery_media")
+}
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+model Alert {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String        @db.Uuid
+  truckId        String?       @db.Uuid
+  userId         String?       @db.Uuid
+  type           AlertType
+  severity       AlertSeverity
+  title          String
+  message        String
+  data           Json          @default("{}")
+  acknowledged   Boolean       @default(false)
+  acknowledgedAt DateTime?
+  acknowledgedBy String?       @db.Uuid
+  createdAt      DateTime      @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  truck        Truck?       @relation(fields: [truckId], references: [id], onDelete: SetNull)
+  user         User?        @relation("AlertUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([truckId])
+  @@index([type])
+  @@index([severity])
+  @@index([acknowledged])
+  @@index([createdAt(sort: Desc)])
+  @@map("alerts")
+}
+
+// ============================================================================
+// MAINTENANCE
+// ============================================================================
+
+model Maintenance {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  truckId         String            @db.Uuid
+  type            MaintenanceType
+  status          MaintenanceStatus @default(SCHEDULED)
+  description     String?
+  cost            Float?
+  vendor          String?
+  scheduledDate   DateTime
+  completedDate   DateTime?
+  nextDueDate     DateTime?
+  nextDueMileage  Int?
+  odometer        Int?
+  notes           String?
+  insuranceClaimId String?          @db.Uuid
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  truck          Truck           @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  insuranceClaim InsuranceClaim? @relation(fields: [insuranceClaimId], references: [id])
+
+  @@index([truckId])
+  @@index([type])
+  @@index([status])
+  @@index([scheduledDate])
+  @@index([nextDueDate])
+  @@map("maintenance")
+}
+
+// ============================================================================
+// FUEL
+// ============================================================================
+
+model FuelLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  truckId     String   @db.Uuid
+  gallons     Float
+  pricePerGallon Float
+  totalCost   Float
+  odometer    Int
+  station     String?
+  latitude    Float?
+  longitude   Float?
+  fueledAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  truck Truck @relation(fields: [truckId], references: [id], onDelete: Cascade)
+
+  @@index([truckId])
+  @@index([fueledAt])
+  @@map("fuel_logs")
+}
+
+// ============================================================================
+// INSURANCE
+// ============================================================================
+
+model InsurancePolicy {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @db.Uuid
+  truckId        String    @db.Uuid
+  provider       String
+  policyNumber   String
+  coverageType   String
+  premium        Float
+  deductible     Float
+  coverageLimit  Float
+  startDate      DateTime
+  expiryDate     DateTime
+  documentS3Key  String?
+  notes          String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  truck        Truck            @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  claims       InsuranceClaim[]
+
+  @@index([organizationId])
+  @@index([truckId])
+  @@index([expiryDate])
+  @@index([isActive])
+  @@map("insurance_policies")
+}
+
+model InsuranceClaim {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  policyId     String      @db.Uuid
+  claimNumber  String?
+  incidentDate DateTime
+  description  String
+  amount       Float
+  status       ClaimStatus @default(PENDING)
+  documentS3Key String?
+  notes        String?
+  filedAt      DateTime    @default(now())
+  resolvedAt   DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  policy      InsurancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  maintenance Maintenance[]
+
+  @@index([policyId])
+  @@index([status])
+  @@index([incidentDate])
+  @@map("insurance_claims")
+}
