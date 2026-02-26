@@ -1,133 +1,104 @@
 /**
- * Database Client
- * Owner: DB-01 (Prisma), AUTH-01 (Error handling)
+ * Prisma Database Client Singleton
+ * Owner: DB-01
  * 
- * Centralized Prisma client with connection pooling and error handling
+ * This module provides a singleton instance of the Prisma client
+ * to prevent connection pool exhaustion in serverless environments.
  */
 
-import { PrismaClient, Prisma } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 
-// Prevent multiple instances in development (hot reload)
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
+declare global {
+  // eslint-disable-next-line no-var
+  var prisma: PrismaClient | undefined
 }
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+const prismaClientSingleton = () => {
+  return new PrismaClient({
+    log: process.env.NODE_ENV === 'development' 
+      ? ['query', 'error', 'warn'] 
+      : ['error'],
   })
+}
+
+export const prisma = globalThis.prisma ?? prismaClientSingleton()
 
 if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma
+  globalThis.prisma = prisma
 }
 
-/**
- * Error codes for common Prisma errors
- */
-export enum PrismaErrorCode {
-  UNIQUE_CONSTRAINT = 'P2002',
-  FOREIGN_KEY_CONSTRAINT = 'P2003',
-  RECORD_NOT_FOUND = 'P2025',
-  TIMEOUT = 'P1008',
-  CONNECTION_ERROR = 'P1001',
-}
+export default prisma
 
 /**
- * Custom error response
+ * Helper to handle Prisma errors consistently
  */
-export interface DatabaseError {
-  code: string
-  message: string
-  field?: string
-}
-
-/**
- * Handle Prisma errors and return user-friendly messages
- */
-export function handlePrismaError(error: unknown): DatabaseError {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    switch (error.code) {
-      case PrismaErrorCode.UNIQUE_CONSTRAINT:
-        const target = (error.meta?.target as string[]) || []
-        const field = target[0] || 'field'
-        return {
-          code: 'DUPLICATE_ERROR',
-          message: `A record with this ${field} already exists`,
-          field,
-        }
-
-      case PrismaErrorCode.FOREIGN_KEY_CONSTRAINT:
-        return {
-          code: 'REFERENCE_ERROR',
-          message: 'Referenced record does not exist',
-        }
-
-      case PrismaErrorCode.RECORD_NOT_FOUND:
-        return {
-          code: 'NOT_FOUND',
-          message: 'Record not found',
-        }
-
-      case PrismaErrorCode.TIMEOUT:
-        return {
-          code: 'TIMEOUT',
-          message: 'Database operation timed out',
-        }
-
-      case PrismaErrorCode.CONNECTION_ERROR:
-        return {
-          code: 'CONNECTION_ERROR',
-          message: 'Could not connect to database',
-        }
-
+export function handlePrismaError(error: unknown): { code: string; message: string } {
+  if (error instanceof Error && 'code' in error) {
+    const prismaError = error as { code: string; message: string }
+    
+    switch (prismaError.code) {
+      case 'P2002':
+        return { code: 'CONFLICT', message: 'A record with this value already exists' }
+      case 'P2025':
+        return { code: 'NOT_FOUND', message: 'Record not found' }
+      case 'P2003':
+        return { code: 'FOREIGN_KEY', message: 'Related record not found' }
       default:
-        console.error('Unhandled Prisma error:', error)
-        return {
-          code: 'DATABASE_ERROR',
-          message: 'A database error occurred',
-        }
+        return { code: 'DATABASE_ERROR', message: prismaError.message }
     }
   }
+  
+  return { code: 'UNKNOWN_ERROR', message: 'An unexpected database error occurred' }
+}
 
-  if (error instanceof Prisma.PrismaClientValidationError) {
-    return {
-      code: 'VALIDATION_ERROR',
-      message: 'Invalid data provided',
-    }
+/**
+ * Helper for pagination
+ */
+export interface PaginationParams {
+  page?: number
+  limit?: number
+}
+
+export interface PaginatedResult<T> {
+  data: T[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasNext: boolean
+    hasPrev: boolean
   }
+}
 
-  console.error('Unknown error:', error)
+export function getPaginationParams(params: PaginationParams): { skip: number; take: number } {
+  const page = Math.max(1, params.page || 1)
+  const limit = Math.min(100, Math.max(1, params.limit || 20))
+  
   return {
-    code: 'UNKNOWN_ERROR',
-    message: 'An unexpected error occurred',
+    skip: (page - 1) * limit,
+    take: limit,
   }
 }
 
-/**
- * Helper to check if error is a Prisma error
- */
-export function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
-  return error instanceof Prisma.PrismaClientKnownRequestError
-}
+export function createPaginatedResult<T>(
+  data: T[],
+  total: number,
+  params: PaginationParams
+): PaginatedResult<T> {
+  const page = Math.max(1, params.page || 1)
+  const limit = Math.min(100, Math.max(1, params.limit || 20))
+  const totalPages = Math.ceil(total / limit)
 
-/**
- * Helper to check for specific Prisma error code
- */
-export function hasPrismaErrorCode(error: unknown, code: string): boolean {
-  return isPrismaError(error) && error.code === code
-}
-
-/**
- * Disconnect Prisma client (for graceful shutdown)
- */
-export async function disconnectDatabase(): Promise<void> {
-  await prisma.$disconnect()
-}
-
-// Graceful shutdown on process termination
-if (typeof process !== 'undefined') {
-  process.on('beforeExit', async () => {
-    await disconnectDatabase()
-  })
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    },
+  }
 }
