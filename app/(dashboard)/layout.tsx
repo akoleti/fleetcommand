@@ -109,7 +109,7 @@ export default function DashboardLayout({
 
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen h-full flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
           <span className="text-sm text-slate-500">Loading...</span>
@@ -119,7 +119,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen h-full flex flex-col bg-slate-50">
       {/* Top navigation */}
       <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-slate-200/80">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -221,8 +221,10 @@ export default function DashboardLayout({
       </nav>
 
       {/* Page content */}
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        {children}
+      <main className="flex-1 min-h-0 w-full overflow-auto">
+        <div className="mx-auto max-w-[1920px] w-full px-4 sm:px-6 lg:px-8 py-8 min-h-full">
+          {children}
+        </div>
       </main>
     </div>
   )

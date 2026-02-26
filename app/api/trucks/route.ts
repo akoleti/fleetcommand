@@ -12,12 +12,30 @@ import { prisma } from '@/lib/db'
 import { getPaginationParams, createPaginatedResult, handlePrismaError } from '@/lib/db'
 import { TruckStatus, UserRole } from '@prisma/client'
 
+const DELIVERY_BUCKETS: Record<string, { min: number; max: number }> = {
+  '0': { min: 0, max: 0 },
+  '1-5': { min: 1, max: 5 },
+  '6-10': { min: 6, max: 10 },
+  '11-20': { min: 11, max: 20 },
+  '20+': { min: 21, max: Infinity },
+}
+
+const MILEAGE_BUCKETS: Record<string, { min: number; max: number }> = {
+  '0': { min: 0, max: 0 },
+  '1-1k': { min: 1, max: 1000 },
+  '1k-5k': { min: 1001, max: 5000 },
+  '5k-10k': { min: 5001, max: 10000 },
+  '10k+': { min: 10001, max: Infinity },
+}
+
 /**
  * GET /api/trucks
  * 
  * Query params:
- * - status: moving|idle|alert|all (default: all)
+ * - status: moving|idle|alert|maintenance|all (default: all)
  * - search: search by truck code or plate
+ * - deliveryBucket: 0|1-5|6-10|11-20|20+
+ * - mileageBucket: 0|1-1k|1k-5k|5k-10k|10k+
  * - page: page number (default: 1)
  * - limit: items per page (default: 20, max: 100)
  * 
@@ -32,12 +50,79 @@ export const GET = withAuth(async (request) => {
     
     const statusParam = searchParams.get('status') || 'all'
     const search = searchParams.get('search') || ''
+    const deliveryBucket = searchParams.get('deliveryBucket')
+    const mileageBucket = searchParams.get('mileageBucket')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
 
     // Build where clause
     const where: any = {
       organizationId: user.organizationId,
+    }
+
+    // Filter by delivery or mileage bucket (requires computing metrics)
+    if (deliveryBucket && DELIVERY_BUCKETS[deliveryBucket]) {
+      const [completedTrips] = await Promise.all([
+        prisma.trip.findMany({
+          where: {
+            truck: { organizationId: user.organizationId },
+            status: 'COMPLETED',
+            actualEnd: { not: null },
+          },
+          select: { truckId: true },
+        }),
+      ])
+      const countByTruck: Record<string, number> = {}
+      for (const t of completedTrips) {
+        countByTruck[t.truckId] = (countByTruck[t.truckId] ?? 0) + 1
+      }
+      const bucket = DELIVERY_BUCKETS[deliveryBucket]
+      let truckIds: string[]
+      if (bucket.min === 0 && bucket.max === 0) {
+        const allTrucks = await prisma.truck.findMany({
+          where: { organizationId: user.organizationId },
+          select: { id: true },
+        })
+        const withDeliveries = new Set(Object.keys(countByTruck))
+        truckIds = allTrucks.filter((t) => !withDeliveries.has(t.id)).map((t) => t.id)
+      } else {
+        truckIds = Object.entries(countByTruck)
+          .filter(([, c]) => c >= bucket.min && c <= bucket.max)
+          .map(([id]) => id)
+      }
+      if (truckIds.length === 0) {
+        return NextResponse.json(createPaginatedResult([], 0, { page, limit }))
+      }
+      where.id = where.id ? { in: truckIds, ...where.id } : { in: truckIds }
+    }
+
+    if (mileageBucket && MILEAGE_BUCKETS[mileageBucket]) {
+      const fuelLogs = await prisma.fuelLog.findMany({
+        where: { truck: { organizationId: user.organizationId } },
+        select: { truckId: true, odometer: true },
+      })
+      const logsByTruck = fuelLogs.reduce<Record<string, { min: number; max: number }>>((acc, log) => {
+        if (!acc[log.truckId]) acc[log.truckId] = { min: log.odometer, max: log.odometer }
+        else {
+          acc[log.truckId].min = Math.min(acc[log.truckId].min, log.odometer)
+          acc[log.truckId].max = Math.max(acc[log.truckId].max, log.odometer)
+        }
+        return acc
+      }, {})
+      const bucket = MILEAGE_BUCKETS[mileageBucket]
+      const allTrucks = await prisma.truck.findMany({
+        where: { organizationId: user.organizationId },
+        select: { id: true },
+      })
+      const truckIds = allTrucks.filter((t) => {
+        const range = logsByTruck[t.id]
+        const mileage = range && range.max >= range.min ? range.max - range.min : 0
+        return mileage >= bucket.min && mileage <= bucket.max
+      }).map((t) => t.id)
+      if (truckIds.length === 0) {
+        return NextResponse.json(createPaginatedResult([], 0, { page, limit }))
+      }
+      where.id = where.id ? { in: truckIds.filter((id) => (where.id as { in: string[] }).in.includes(id)) } : { in: truckIds }
     }
 
     // RBAC: Drivers can only see their assigned truck

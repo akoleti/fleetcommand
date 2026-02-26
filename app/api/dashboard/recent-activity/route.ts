@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server'
 import { withAuth } from '@/middleware/auth'
 import { prisma, handlePrismaError } from '@/lib/db'
 
-const LIMIT = 25
+const LIMIT = 50
 
 export const GET = withAuth(async (request) => {
   try {

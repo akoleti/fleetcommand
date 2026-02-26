@@ -1,7 +1,9 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, LabelList } from 'recharts'
 
 interface DashboardStats {
   trucks: { total: number; active: number; idle: number; maintenance: number; blocked: number }
@@ -22,9 +24,41 @@ const severityConfig: Record<string, { bg: string; text: string; dot: string }> 
   INFO: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
 }
 
+type TypeFilter = 'all' | 'critical' | 'warning' | 'info' | 'delivery' | 'pickup'
+
+interface TruckMetric {
+  id: string
+  licensePlate: string
+  make: string
+  model: string
+  deliveryCount: number
+  mileage: number
+}
+
+const DELIVERY_BUCKETS = [
+  { key: '0', label: '0', min: 0, max: 0 },
+  { key: '1-5', label: '1-5', min: 1, max: 5 },
+  { key: '6-10', label: '6-10', min: 6, max: 10 },
+  { key: '11-20', label: '11-20', min: 11, max: 20 },
+  { key: '20+', label: '20+', min: 21, max: Infinity },
+]
+
+const MILEAGE_BUCKETS = [
+  { key: '0', label: '0 mi', min: 0, max: 0 },
+  { key: '1-1k', label: '1-1k mi', min: 1, max: 1000 },
+  { key: '1k-5k', label: '1k-5k mi', min: 1001, max: 5000 },
+  { key: '5k-10k', label: '5k-10k mi', min: 5001, max: 10000 },
+  { key: '10k+', label: '10k+ mi', min: 10001, max: Infinity },
+]
+
+const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+
 export default function DashboardPage() {
+  const router = useRouter()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [activity, setActivity] = useState<ActivityItem[]>([])
+  const [truckMetrics, setTruckMetrics] = useState<TruckMetric[]>([])
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -36,15 +70,18 @@ export default function DashboardPage() {
       const token = localStorage.getItem('accessToken')
       const headers = { Authorization: `Bearer ${token}` }
 
-      const [statsRes, activityRes] = await Promise.allSettled([
+      const [statsRes, activityRes, metricsRes] = await Promise.allSettled([
         fetch('/api/dashboard/stats', { headers }),
         fetch('/api/dashboard/recent-activity', { headers }),
+        fetch('/api/dashboard/truck-metrics', { headers }),
       ])
 
       const statsData = statsRes.status === 'fulfilled' && statsRes.value.ok
         ? await statsRes.value.json() : null
       const activityData = activityRes.status === 'fulfilled' && activityRes.value.ok
         ? await activityRes.value.json() : null
+      const metricsData = metricsRes.status === 'fulfilled' && metricsRes.value.ok
+        ? await metricsRes.value.json() : null
 
       if (statsData) {
         setStats({
@@ -56,12 +93,48 @@ export default function DashboardPage() {
         })
       }
       setActivity(activityData?.data || [])
+      setTruckMetrics(metricsData?.data || [])
     } catch {
       // Silently handle dashboard fetch errors
     } finally {
       setLoading(false)
     }
   }
+
+  const filteredActivity = useMemo(() => {
+    return activity.filter((item) => {
+      if (typeFilter === 'all') return true
+      if (item.kind === 'alert') {
+        if (typeFilter === 'critical') return item.severity === 'CRITICAL'
+        if (typeFilter === 'warning') return item.severity === 'WARNING'
+        if (typeFilter === 'info') return item.severity === 'INFO'
+        return false
+      }
+      if (typeFilter === 'delivery') return item.kind === 'delivery'
+      if (typeFilter === 'pickup') return item.kind === 'pickup'
+      return false
+    })
+  }, [activity, typeFilter])
+
+  const deliveryPieData = useMemo(() => {
+    return DELIVERY_BUCKETS.map((b) => ({
+      name: b.label,
+      key: b.key,
+      value: truckMetrics.filter(
+        (t) => t.deliveryCount >= b.min && t.deliveryCount <= b.max
+      ).length,
+    })).filter((d) => d.value > 0)
+  }, [truckMetrics])
+
+  const mileagePieData = useMemo(() => {
+    return MILEAGE_BUCKETS.map((b) => ({
+      name: b.label,
+      key: b.key,
+      value: truckMetrics.filter(
+        (t) => t.mileage >= b.min && t.mileage <= b.max
+      ).length,
+    })).filter((d) => d.value > 0)
+  }, [truckMetrics])
 
   if (loading) {
     return (
@@ -191,14 +264,30 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent alerts & activity */}
-      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-900">Recent Alerts & Activity</h2>
-          <Link href="/alerts" className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors">
-            View all alerts
-          </Link>
-        </div>
-        {activity.length > 0 ? (
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex-1 min-w-0 rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-semibold text-slate-900">Recent Alerts & Activity</h2>
+              <div className="flex gap-1 p-1 rounded-xl bg-slate-100">
+                {(['all', 'critical', 'warning', 'info', 'delivery', 'pickup'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setTypeFilter(f)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      typeFilter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+              <Link href="/alerts" className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors">
+                View all alerts
+              </Link>
+          </div>
+        {filteredActivity.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -210,7 +299,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {activity.map((item) => {
+                {filteredActivity.map((item) => {
                   const ts = new Date(item.timestamp)
                   const dateStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                   const timeStr = ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
@@ -295,9 +384,117 @@ export default function DashboardPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="mt-3 text-sm text-slate-500">No recent activity</p>
-            <p className="mt-1 text-xs text-slate-400">Alerts and delivery/pickup events will appear here.</p>
+            <p className="mt-1 text-xs text-slate-400">
+              {typeFilter !== 'all'
+                ? 'Try adjusting filters.'
+                : 'Alerts and delivery/pickup events will appear here.'}
+            </p>
           </div>
         )}
+        </div>
+
+        {/* Pie charts - filter trucks by deliveries and mileage */}
+        <div className="lg:w-80 xl:w-96 shrink-0 space-y-6">
+          <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">Trucks by Deliveries</h3>
+            <p className="text-xs text-slate-500 mb-2">Click a segment to view trucks</p>
+            {deliveryPieData.length > 0 ? (
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={deliveryPieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={70}
+                      paddingAngle={2}
+                      onClick={(entry: { key?: string }) => {
+                        const key = entry?.key
+                        if (key) router.push(`/trucks?deliveryBucket=${encodeURIComponent(key)}`)
+                      }}
+                    >
+                      <LabelList dataKey="name" position="outside" fill="#64748b" fontSize={11} />
+                      {deliveryPieData.map((_, i) => (
+                        <Cell
+                          key={i}
+                          fill={PIE_COLORS[i % PIE_COLORS.length]}
+                          stroke="transparent"
+                          strokeWidth={2}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }) =>
+                        active && payload?.[0] ? (
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg text-sm">
+                            <span className="font-medium text-slate-700">{payload[0].payload.name}</span>
+                            <span className="text-slate-500"> — </span>
+                            <span className="text-slate-600">{payload[0].value} trucks</span>
+                          </div>
+                        ) : null
+                      }
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 py-8 text-center">No delivery data</p>
+            )}
+          </div>
+
+          <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">Trucks by Mileage</h3>
+            <p className="text-xs text-slate-500 mb-2">Click a segment to view trucks</p>
+            {mileagePieData.length > 0 ? (
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={mileagePieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={70}
+                      paddingAngle={2}
+                      onClick={(entry: { key?: string }) => {
+                        const key = entry?.key
+                        if (key) router.push(`/trucks?mileageBucket=${encodeURIComponent(key)}`)
+                      }}
+                    >
+                      <LabelList dataKey="name" position="outside" fill="#64748b" fontSize={11} />
+                      {mileagePieData.map((_, i) => (
+                        <Cell
+                          key={i}
+                          fill={PIE_COLORS[i % PIE_COLORS.length]}
+                          stroke="transparent"
+                          strokeWidth={2}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }) =>
+                        active && payload?.[0] ? (
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg text-sm">
+                            <span className="font-medium text-slate-700">{payload[0].payload.name}</span>
+                            <span className="text-slate-500"> — </span>
+                            <span className="text-slate-600">{payload[0].value} trucks</span>
+                          </div>
+                        ) : null
+                      }
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 py-8 text-center">No mileage data</p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

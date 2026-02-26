@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 
 interface Truck {
   id: string
@@ -57,6 +57,7 @@ const MAKES = ['Freightliner', 'Peterbilt', 'Kenworth', 'Volvo', 'Mack', 'Intern
 const VALID_STATUS_FILTERS = ['all', 'moving', 'idle', 'maintenance', 'alert']
 
 export default function TrucksPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const statusFromUrl = searchParams.get('status')
   const initialStatus = statusFromUrl && VALID_STATUS_FILTERS.includes(statusFromUrl) ? statusFromUrl : 'all'
@@ -78,6 +79,9 @@ export default function TrucksPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  const deliveryBucket = searchParams.get('deliveryBucket')
+  const mileageBucket = searchParams.get('mileageBucket')
+
   useEffect(() => {
     const urlStatus = searchParams.get('status')
     const newFilter = urlStatus && VALID_STATUS_FILTERS.includes(urlStatus) ? urlStatus : 'all'
@@ -86,7 +90,7 @@ export default function TrucksPage() {
 
   useEffect(() => {
     fetchTrucks()
-  }, [statusFilter, searchQuery, page])
+  }, [statusFilter, searchQuery, page, deliveryBucket, mileageBucket])
 
   const fetchTrucks = async () => {
     try {
@@ -97,6 +101,8 @@ export default function TrucksPage() {
         page: page.toString(),
         limit: '20',
       })
+      if (deliveryBucket) params.set('deliveryBucket', deliveryBucket)
+      if (mileageBucket) params.set('mileageBucket', mileageBucket)
 
       const token = localStorage.getItem('accessToken')
       const response = await fetch(`/api/trucks?${params}`, {
@@ -216,6 +222,49 @@ export default function TrucksPage() {
           Add Truck
         </button>
       </div>
+
+      {/* Bucket filter indicator */}
+      {(deliveryBucket || mileageBucket) && (
+        <div className="mt-6 flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-slate-500">Filtered by:</span>
+          {deliveryBucket && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-sm font-medium text-brand-700">
+              Deliveries: {deliveryBucket}
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams(searchParams.toString())
+                  params.delete('deliveryBucket')
+                  router.push(params.toString() ? `/trucks?${params}` : '/trucks')
+                }}
+                className="hover:text-brand-900"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {mileageBucket && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-sm font-medium text-brand-700">
+              Mileage: {mileageBucket}
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams(searchParams.toString())
+                  params.delete('mileageBucket')
+                  router.push(params.toString() ? `/trucks?${params}` : '/trucks')
+                }}
+                className="hover:text-brand-900"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          <Link
+            href="/trucks"
+            className="text-sm font-medium text-brand-600 hover:text-brand-700"
+          >
+            Clear all
+          </Link>
+        </div>
+      )}
 
       {/* Filters bar */}
       <div className="mt-6 flex flex-col sm:flex-row gap-3">
