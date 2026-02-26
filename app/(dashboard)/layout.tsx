@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 
 const navItems = [
   {
@@ -94,7 +94,29 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken')
+    if (!token) {
+      router.replace('/login')
+    } else {
+      setAuthChecked(true)
+    }
+  }, [router])
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+          <span className="text-sm text-slate-500">Loading...</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -148,11 +170,19 @@ export default function DashboardLayout({
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-danger-500 ring-2 ring-white" />
               </button>
 
-              {/* Avatar */}
-              <button className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white text-xs font-bold">
-                  FC
-                </div>
+              {/* Logout */}
+              <button
+                onClick={() => {
+                  localStorage.removeItem('accessToken')
+                  fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+                  router.replace('/login')
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                </svg>
+                <span className="hidden sm:inline">Logout</span>
               </button>
 
               {/* Mobile menu toggle */}
