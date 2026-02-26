@@ -95,9 +95,9 @@
 | FU-01 | FUEL-01 | DONE | — | POST /api/fuel (create fuel log with auto-calculated totalCost) |
 | FU-02 | FUEL-01 | DONE | — | GET /api/fuel/[truckId] (fuel history + summary stats) |
 | FU-03 | FUEL-01 | DONE | — | Fuel overview page (stats cards, filterable table) |
-| FU-04 | FUEL-01 | TODO | — | Reports page |
-| FU-05 | FUEL-01 | TODO | — | PDF generation (lib/pdf.ts) |
-| FU-06 | FUEL-01 | TODO | — | S3 reports storage |
+| FU-04 | FUEL-01 | DONE | — | Reports page (type selector, date range, generate + print) |
+| FU-05 | FUEL-01 | DONE | — | HTML report generation (lib/pdf.ts — fleet, truck, fuel reports) |
+| FU-06 | FUEL-01 | DONE | — | Reports API (GET /api/reports, POST /api/reports/generate) |
 | FU-07 | FUEL-01 | TODO | — | Fuel tests |
 
 ---
@@ -107,12 +107,12 @@
 | Story | Agent | Status | PR | Notes |
 |-------|-------|--------|----|----|
 | DP-01 | DELIVERY-01 | DONE | — | S3 presigned URLs (lib/s3.ts + /api/upload/presign) |
-| DP-02 | DELIVERY-01 | TODO | — | POST /api/delivery-proof |
-| DP-03 | DELIVERY-01 | TODO | — | POST /api/delivery-proof/media |
-| DP-04 | DELIVERY-01 | TODO | — | Signature capture (mobile) |
-| DP-05 | DELIVERY-01 | TODO | — | Photo capture (mobile) |
-| DP-06 | DELIVERY-01 | TODO | — | Offline sync queue |
-| DP-07 | DELIVERY-01 | TODO | — | Proof viewer (web) |
+| DP-02 | DELIVERY-01 | DONE | — | POST /api/delivery-proof (create proof, validate trip is IN_PROGRESS) |
+| DP-03 | DELIVERY-01 | DONE | — | POST /api/delivery-proof/[id]/media (create media + presigned upload URL) |
+| DP-04 | DELIVERY-01 | TODO | — | Signature capture (mobile — React Native) |
+| DP-05 | DELIVERY-01 | TODO | — | Photo capture (mobile — React Native) |
+| DP-06 | DELIVERY-01 | TODO | — | Offline sync queue (mobile) |
+| DP-07 | DELIVERY-01 | DONE | — | Proof viewer (web — delivery-proofs page + trip detail proof section) |
 | DP-08 | DELIVERY-01 | TODO | — | Upload tests |
 
 ---
@@ -145,9 +145,9 @@
 ## Summary
 
 - **Total Stories:** 67
-- **Completed:** 42
-- **Remaining:** 25 (mostly tests, mobile, delivery proof, PDF reports)
+- **Completed:** 50
+- **Remaining:** 17 (unit/integration/E2E tests, mobile app, offline sync)
+- **Web platform:** Fully functional
 - **Sprints:** 9 × 2 weeks = 18 weeks
-- **Parallel Work:** DB+AUTH (S1), GPS+FLEET (S2+), ALERT+MAINT (S4-5), FUEL+DELIVERY (S6)
 
 **Last Updated:** 2026-02-26 by ORCH-01
