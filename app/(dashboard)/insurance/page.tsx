@@ -50,6 +50,13 @@ const claimStatusConfig: Record<string, { bg: string; text: string; dot: string 
   PAID: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
 }
 
+const COVERAGE_TYPES = ['Liability', 'Full Coverage', 'Comprehensive', 'Cargo Insurance', 'Physical Damage']
+
+const emptyPolicyForm = {
+  truckId: '', provider: '', policyNumber: '', coverageType: '',
+  premium: '', deductible: '', coverageLimit: '', startDate: '', expiryDate: '', notes: '',
+}
+
 export default function InsurancePage() {
   const [activeTab, setActiveTab] = useState<'policies' | 'claims' | 'expiring'>('policies')
   const [policies, setPolicies] = useState<InsurancePolicy[]>([])
@@ -59,6 +66,12 @@ export default function InsurancePage() {
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+
+  const [showModal, setShowModal] = useState(false)
+  const [modalForm, setModalForm] = useState(emptyPolicyForm)
+  const [modalError, setModalError] = useState<string | null>(null)
+  const [modalSubmitting, setModalSubmitting] = useState(false)
+  const [trucks, setTrucks] = useState<{ id: string; name: string | null; make: string; model: string; licensePlate: string }[]>([])
 
   useEffect(() => {
     setPage(1)
@@ -157,6 +170,54 @@ export default function InsurancePage() {
     return Math.ceil(diff / (1000 * 60 * 60 * 24))
   }
 
+  const openAddModal = async () => {
+    setShowModal(true)
+    setModalForm(emptyPolicyForm)
+    setModalError(null)
+    try {
+      const res = await fetch('/api/trucks?limit=100', { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setTrucks(data.data || [])
+      }
+    } catch {}
+  }
+
+  const handleAddPolicy = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setModalSubmitting(true)
+    setModalError(null)
+    try {
+      const res = await fetch('/api/insurance', {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          truckId: modalForm.truckId,
+          provider: modalForm.provider,
+          policyNumber: modalForm.policyNumber,
+          coverageType: modalForm.coverageType,
+          premium: parseFloat(modalForm.premium),
+          deductible: parseFloat(modalForm.deductible),
+          coverageLimit: parseFloat(modalForm.coverageLimit),
+          startDate: modalForm.startDate,
+          expiryDate: modalForm.expiryDate,
+          notes: modalForm.notes || null,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setModalError(data.error || 'Failed to add policy')
+        return
+      }
+      setShowModal(false)
+      fetchPolicies()
+    } catch {
+      setModalError('An unexpected error occurred')
+    } finally {
+      setModalSubmitting(false)
+    }
+  }
+
   const tabs = [
     { key: 'policies' as const, label: 'Policies' },
     { key: 'claims' as const, label: 'Claims' },
@@ -170,15 +231,15 @@ export default function InsurancePage() {
           <h1 className="text-2xl font-bold text-slate-900">Insurance</h1>
           <p className="mt-1 text-sm text-slate-500">Manage policies and claims</p>
         </div>
-        <Link
-          href="/insurance/new"
+        <button
+          onClick={openAddModal}
           className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
           Add Policy
-        </Link>
+        </button>
       </div>
 
       <div className="mt-6 flex gap-1 p-1 rounded-xl bg-slate-100 w-fit">
@@ -436,6 +497,123 @@ export default function InsurancePage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Add Policy Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-900 mb-5">Add Insurance Policy</h3>
+
+            {modalError && (
+              <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{modalError}</div>
+            )}
+
+            <form onSubmit={handleAddPolicy} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Truck</label>
+                <select required value={modalForm.truckId} onChange={(e) => setModalForm({ ...modalForm, truckId: e.target.value })}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500">
+                  <option value="">Select a truck...</option>
+                  {trucks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name ? `${t.name} — ` : ''}{t.make} {t.model} ({t.licensePlate})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Insurance Provider</label>
+                  <input type="text" required placeholder="e.g. State Farm" value={modalForm.provider}
+                    onChange={(e) => setModalForm({ ...modalForm, provider: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Policy Number</label>
+                  <input type="text" required placeholder="POL-123456" value={modalForm.policyNumber}
+                    onChange={(e) => setModalForm({ ...modalForm, policyNumber: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Coverage Type</label>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {COVERAGE_TYPES.map((ct) => (
+                    <label key={ct}
+                      className={`flex items-center justify-center rounded-xl border-2 py-2 px-2 text-xs font-medium cursor-pointer transition-all ${
+                        modalForm.coverageType === ct
+                          ? 'border-brand-600 bg-brand-50 text-brand-700'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      }`}>
+                      <input type="radio" name="coverageType" value={ct} checked={modalForm.coverageType === ct}
+                        onChange={(e) => setModalForm({ ...modalForm, coverageType: e.target.value })} className="sr-only" />
+                      {ct}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Premium ($)</label>
+                  <input type="number" step="0.01" required placeholder="1200" value={modalForm.premium}
+                    onChange={(e) => setModalForm({ ...modalForm, premium: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Deductible ($)</label>
+                  <input type="number" step="0.01" required placeholder="1000" value={modalForm.deductible}
+                    onChange={(e) => setModalForm({ ...modalForm, deductible: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Coverage Limit ($)</label>
+                  <input type="number" step="0.01" required placeholder="500000" value={modalForm.coverageLimit}
+                    onChange={(e) => setModalForm({ ...modalForm, coverageLimit: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Start Date</label>
+                  <input type="date" required value={modalForm.startDate}
+                    onChange={(e) => setModalForm({ ...modalForm, startDate: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Expiry Date</label>
+                  <input type="date" required value={modalForm.expiryDate}
+                    onChange={(e) => setModalForm({ ...modalForm, expiryDate: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Notes <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <textarea rows={2} placeholder="Any additional notes..." value={modalForm.notes}
+                  onChange={(e) => setModalForm({ ...modalForm, notes: e.target.value })}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 resize-none" />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowModal(false)}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={modalSubmitting || !modalForm.coverageType}
+                  className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                  {modalSubmitting ? 'Adding...' : 'Add Policy'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
