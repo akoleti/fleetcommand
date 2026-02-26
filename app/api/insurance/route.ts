@@ -50,6 +50,9 @@ export const GET = withAuth(async (request) => {
               model: true,
             },
           },
+          createdBy: {
+            select: { id: true, name: true },
+          },
           claims: {
             orderBy: { createdAt: 'desc' },
             take: 5,
@@ -131,6 +134,7 @@ export const POST = withRole(UserRole.OWNER, UserRole.MANAGER)(async (request) =
         expiryDate: expiry,
         notes,
         isActive: true,
+        createdById: user.userId,
       },
       include: {
         truck: {

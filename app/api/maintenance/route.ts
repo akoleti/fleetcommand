@@ -44,6 +44,9 @@ export const GET = withAuth(async (request) => {
               model: true,
             },
           },
+          createdBy: {
+            select: { id: true, name: true },
+          },
         },
         orderBy: { scheduledDate: 'desc' },
       }),
@@ -119,6 +122,7 @@ export const POST = withRole(UserRole.OWNER, UserRole.MANAGER, UserRole.DRIVER)(
         nextDueMileage: nextDueMileage != null ? parseInt(nextDueMileage) : undefined,
         odometer: odometer != null ? parseInt(odometer) : undefined,
         notes,
+        createdById: user.userId,
       },
       include: {
         truck: {

@@ -68,7 +68,8 @@ interface MaintenanceRecord {
 
 interface FuelRecord {
   id: string
-  date: string
+  date?: string
+  fueledAt?: string
   station: string | null
   gallons: number
   pricePerGallon: number
@@ -158,6 +159,12 @@ const labelCls = 'block text-sm font-medium text-slate-700 mb-1.5'
 const primaryBtnCls = 'rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
 const secondaryBtnCls = 'rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors'
 
+const formatFuelDate = (dateStr: string | undefined | null) => {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
@@ -212,6 +219,7 @@ export default function TruckDetailPage() {
   const [fuelForm, setFuelForm] = useState({ gallons: '', pricePerGallon: '', odometer: '', station: '' })
   const [fuelSubmitting, setFuelSubmitting] = useState(false)
   const [fuelModalError, setFuelModalError] = useState<string | null>(null)
+  const [orgFuelStations, setOrgFuelStations] = useState<string[]>([])
 
   // Insurance modal
   const [insuranceModalOpen, setInsuranceModalOpen] = useState(false)
@@ -256,11 +264,13 @@ export default function TruckDetailPage() {
     if (activeTab === 'fuel') {
       fetchedTabs.current.add('fuel')
       setFuelLoading(true)
-      fetch(`/api/fuel?truckId=${truckId}&limit=20`, { headers })
-        .then((r) => r.ok ? r.json() : Promise.reject())
-        .then((d) => setFuelLogs(d.data ?? d))
-        .catch(() => {})
-        .finally(() => setFuelLoading(false))
+      Promise.all([
+        fetch(`/api/fuel?truckId=${truckId}&limit=20`, { headers }).then((r) => r.ok ? r.json() : Promise.reject()).then((d) => d.data ?? d),
+        fetch('/api/fuel-stations', { headers }).then((r) => r.ok ? r.json() : []).catch(() => []),
+      ]).then(([logs, stations]: [FuelRecord[], { name: string }[]]) => {
+        setFuelLogs(logs)
+        setOrgFuelStations(stations.map((s) => s.name))
+      }).catch(() => {}).finally(() => setFuelLoading(false))
     }
 
     if (activeTab === 'insurance') {
@@ -457,6 +467,10 @@ export default function TruckDetailPage() {
     setFuelModalError(null)
     setFuelForm({ gallons: '', pricePerGallon: '', odometer: '', station: '' })
     setFuelModalOpen(true)
+    fetch('/api/fuel-stations', { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : [])
+      .then((stations: { name: string }[]) => setOrgFuelStations(stations.map((s) => s.name)))
+      .catch(() => {})
   }
 
   const handleFuelSubmit = async (e: React.FormEvent) => {
@@ -992,7 +1006,7 @@ export default function TruckDetailPage() {
                     {fuelLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="whitespace-nowrap py-4 pl-5 pr-3 text-sm text-slate-900">
-                          {new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {formatFuelDate(log.fueledAt ?? log.date)}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600">
                           {log.station || <span className="text-slate-400">&mdash;</span>}
@@ -1274,10 +1288,19 @@ export default function TruckDetailPage() {
                 </div>
                 <div>
                   <label className={labelCls}>Station</label>
-                  <select value={fuelForm.station} onChange={(e) => setFuelForm({ ...fuelForm, station: e.target.value })} className={inputCls}>
-                    <option value="">Select station...</option>
-                    {FUEL_STATIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <input
+                    type="text"
+                    list="fuel-station-list"
+                    placeholder="Select or type station name..."
+                    value={fuelForm.station}
+                    onChange={(e) => setFuelForm({ ...fuelForm, station: e.target.value })}
+                    className={inputCls}
+                  />
+                  <datalist id="fuel-station-list">
+                    {[...new Set([...orgFuelStations, ...FUEL_STATIONS])].map((s) => (
+                      <option key={s} value={s} />
+                    ))}
+                  </datalist>
                 </div>
               </div>
               <div className="flex items-center justify-end gap-3 pt-2">

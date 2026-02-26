@@ -51,6 +51,9 @@ export const GET = withAuth(async (request) => {
               model: true,
             },
           },
+          createdBy: {
+            select: { id: true, name: true },
+          },
         },
         orderBy: { fueledAt: 'desc' },
       }),
@@ -118,6 +121,7 @@ export const POST = withRole(UserRole.OWNER, UserRole.MANAGER, UserRole.DRIVER)(
         latitude: latitude ?? null,
         longitude: longitude ?? null,
         fueledAt: fueledAt ? new Date(fueledAt) : new Date(),
+        createdById: user.userId,
       },
       include: {
         truck: {

@@ -225,14 +225,39 @@ export async function generateTruckReport(
 
   let body = ''
 
-  // Vehicle Info
-  body += `<h2>Vehicle Information</h2><div class="grid">`
-  body += statCard('Make / Model', `${truck.make} ${truck.model}`)
-  body += statCard('Year', truck.year.toString())
-  body += statCard('VIN', truck.vin)
-  body += statCard('License Plate', truck.licensePlate)
-  body += statCard('Status', truck.status.replace(/_/g, ' '))
+  // Truck History Summary (who drove, km driven, etc.)
+  const uniqueDrivers = [...new Set(trips.map((t) => t.driver?.name).filter(Boolean))] as string[]
+  const fuelByDate = [...fuelLogs].sort(
+    (a, b) => new Date(a.fueledAt).getTime() - new Date(b.fueledAt).getTime()
+  )
+  const odometerStart = fuelByDate.length > 0 ? fuelByDate[0].odometer : null
+  const odometerEnd = fuelByDate.length > 0 ? fuelByDate[fuelByDate.length - 1].odometer : null
+  const milesDriven =
+    odometerStart != null && odometerEnd != null && odometerEnd >= odometerStart
+      ? odometerEnd - odometerStart
+      : null
+
+  body += `<h2>Truck History Summary</h2><div class="grid">`
+  body += statCard('Drivers Who Drove', uniqueDrivers.length > 0 ? uniqueDrivers.join(', ') : 'None')
+  body += statCard('Total Trips', trips.length.toString())
+  body += statCard('Miles Driven (from odometer)', milesDriven != null ? `${milesDriven.toLocaleString()} mi` : 'N/A')
+  body += statCard('Idle Time', 'Not tracked')
   body += `</div>`
+
+  // Driver History (who drove, when)
+  if (uniqueDrivers.length > 0) {
+    body += `<h2>Driver History</h2>`
+    const driverTrips = trips.reduce<Record<string, number>>((acc, t) => {
+      const name = t.driver?.name ?? 'Unknown'
+      acc[name] = (acc[name] || 0) + 1
+      return acc
+    }, {})
+    body += `<table><thead><tr><th>Driver</th><th class="text-right">Trips</th></tr></thead><tbody>`
+    Object.entries(driverTrips).forEach(([name, count]) => {
+      body += `<tr><td>${name}</td><td class="text-right">${count}</td></tr>`
+    })
+    body += `</tbody></table>`
+  }
 
   // Trips
   body += `<h2>Trips (${trips.length})</h2>`
@@ -241,7 +266,7 @@ export async function generateTruckReport(
     trips.forEach((t) => {
       body += `<tr>
         <td>${formatDate(t.scheduledStart)}</td>
-        <td>${t.driver.name}</td>
+        <td>${t.driver?.name ?? '—'}</td>
         <td>${t.originAddress}</td>
         <td>${t.destinationAddress}</td>
         <td>${statusBadge(t.status)}</td>

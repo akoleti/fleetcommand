@@ -240,6 +240,7 @@ async function main() {
         actualStart: status !== TripStatus.SCHEDULED ? new Date(scheduledStart.getTime() + randInt(-30, 60) * 60000) : null,
         actualEnd: status === TripStatus.COMPLETED ? new Date(scheduledStart.getTime() + (durationHours + randInt(-1, 2)) * 3600000) : null,
         notes: pick([null, null, 'Fragile cargo — handle with care', 'Oversized load permit required', 'Customer requested morning delivery', 'Refrigerated cargo at 35°F', null]),
+        createdById: pick([owner.id, manager.id]),
       },
     })
     trips.push(trip)
@@ -304,6 +305,7 @@ async function main() {
           nextDueMileage: randInt(10000, 50000),
           odometer: randInt(80000, 600000),
           notes: pick([null, null, 'Parts on backorder — 2-day delay', 'Warranty claim submitted', 'Recurring issue — monitor closely', null]),
+          createdById: pick([owner.id, manager.id]),
         },
       })
       maintCount++
@@ -332,6 +334,7 @@ async function main() {
         latitude: city.lat + randFloat(-0.05, 0.05),
         longitude: city.lng + randFloat(-0.05, 0.05),
         fueledAt: daysAgo(randInt(0, 60)),
+        createdById: pick([owner.id, manager.id]),
       })
     }
     await prisma.fuelLog.createMany({ data: logs })
@@ -358,6 +361,7 @@ async function main() {
         startDate: daysAgo(startDays),
         expiryDate: daysFromNow(expiryDays),
         isActive: true,
+        createdById: pick([owner.id, manager.id]),
       },
     })
     policies.push(policy)

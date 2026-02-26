@@ -47,6 +47,11 @@ interface PaginatedResponse<T> {
   }
 }
 
+interface FuelStation {
+  id: string
+  name: string
+}
+
 const getHeaders = () => {
   const token = localStorage.getItem('accessToken')
   return { Authorization: `Bearer ${token}` }
@@ -55,8 +60,12 @@ const getHeaders = () => {
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
 
-const formatDate = (dateStr: string) =>
-  new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const formatDate = (dateStr: string | undefined | null) => {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
 export default function FuelPage() {
   const [trucks, setTrucks] = useState<Truck[]>([])
@@ -71,10 +80,73 @@ export default function FuelPage() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
 
+  // Partner fuel stations
+  const [fuelStations, setFuelStations] = useState<FuelStation[]>([])
+  const [newStation, setNewStation] = useState('')
+  const [stationsLoading, setStationsLoading] = useState(true)
+  const [addingStation, setAddingStation] = useState(false)
+  const [deletingStationId, setDeletingStationId] = useState<string | null>(null)
+  const [stationError, setStationError] = useState<string | null>(null)
+
   useEffect(() => {
     fetchTrucks()
     fetchStats()
+    fetchStations()
   }, [])
+
+  const fetchStations = async () => {
+    try {
+      setStationsLoading(true)
+      const res = await fetch('/api/fuel-stations', { headers: getHeaders() })
+      if (!res.ok) throw new Error('Failed to fetch fuel stations')
+      const data = await res.json()
+      setFuelStations(data)
+      setStationError(null)
+    } catch {
+      // non-critical
+    } finally {
+      setStationsLoading(false)
+    }
+  }
+
+  const handleAddStation = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmed = newStation.trim()
+    if (!trimmed) return
+    try {
+      setAddingStation(true)
+      setStationError(null)
+      const res = await fetch('/api/fuel-stations', {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to add station')
+      setNewStation('')
+      setFuelStations((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+    } catch (err) {
+      setStationError(err instanceof Error ? err.message : 'Failed to add')
+    } finally {
+      setAddingStation(false)
+    }
+  }
+
+  const handleDeleteStation = async (id: string) => {
+    try {
+      setDeletingStationId(id)
+      const res = await fetch(`/api/fuel-stations/${id}`, { method: 'DELETE', headers: getHeaders() })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to remove')
+      }
+      setFuelStations((prev) => prev.filter((s) => s.id !== id))
+    } catch (err) {
+      setStationError(err instanceof Error ? err.message : 'Failed to remove')
+    } finally {
+      setDeletingStationId(null)
+    }
+  }
 
   useEffect(() => {
     if (selectedTruckId) {
@@ -239,6 +311,65 @@ export default function FuelPage() {
         </div>
       )}
 
+      {/* Partner Fuel Stations */}
+      <div className="mt-6 rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100">
+          <h2 className="text-lg font-semibold text-slate-900">Partner Fuel Stations</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Add fuel stations you have tie-ups with. They appear as suggestions when logging fuel on a truck.
+          </p>
+        </div>
+        <div className="px-6 py-4">
+          {stationError && (
+            <div className="mb-4 flex items-start gap-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3">
+              <svg className="w-5 h-5 text-red-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm text-red-700">{stationError}</p>
+            </div>
+          )}
+          <form onSubmit={handleAddStation} className="flex gap-3 mb-4">
+            <input
+              type="text"
+              value={newStation}
+              onChange={(e) => setNewStation(e.target.value)}
+              placeholder="e.g. ABC Fleet Fuel, XYZ Truck Stop"
+              className="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
+            />
+            <button
+              type="submit"
+              disabled={addingStation || !newStation.trim()}
+              className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {addingStation ? 'Adding...' : 'Add Station'}
+            </button>
+          </form>
+          {stationsLoading ? (
+            <div className="animate-pulse space-y-2">
+              {[1, 2].map((i) => <div key={i} className="h-10 bg-slate-200 rounded-lg" />)}
+            </div>
+          ) : fuelStations.length === 0 ? (
+            <p className="text-sm text-slate-500 py-2">No partner stations yet. Add stations above to see them when logging fuel.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {fuelStations.map((station) => (
+                <li key={station.id} className="flex items-center justify-between py-3 first:pt-0">
+                  <span className="text-sm font-medium text-slate-900">{station.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteStation(station.id)}
+                    disabled={deletingStationId === station.id}
+                    className="text-sm text-red-600 hover:text-red-700 disabled:opacity-50 transition-colors"
+                  >
+                    {deletingStationId === station.id ? 'Removing...' : 'Remove'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
       <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
         {statCards.map((card, i) => (
           <div key={card.label} className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
@@ -360,7 +491,7 @@ export default function FuelPage() {
                 {logs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="whitespace-nowrap py-4 pl-5 pr-3 text-sm text-slate-900">
-                      {formatDate(log.fueledAt || log.date || '')}
+                      {formatDate(log.fueledAt ?? log.date)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600">
                       {log.station || <span className="text-slate-400">—</span>}

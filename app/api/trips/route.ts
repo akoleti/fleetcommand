@@ -128,6 +128,9 @@ export const GET = withAuth(async (request) => {
               phone: true,
             },
           },
+          createdBy: {
+            select: { id: true, name: true },
+          },
           deliveryProofs: {
             select: {
               id: true,
@@ -345,6 +348,7 @@ export const POST = withRole(UserRole.OWNER, UserRole.MANAGER)(async (request) =
           scheduledEnd: endDate,
           notes,
           status: TripStatus.SCHEDULED,
+          createdById: user.userId,
         },
         include: {
           truck: {

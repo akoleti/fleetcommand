@@ -114,6 +114,7 @@ model Organization {
   drivers            Driver[]
   alerts             Alert[]
   insurancePolicies  InsurancePolicy[]
+  fuelStations       FuelStation[]
 
   @@map("organizations")
 }
@@ -134,6 +135,10 @@ model User {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   alerts       Alert[]      @relation("AlertUser")
   refreshTokens RefreshToken[]
+  createdTrips       Trip[]            @relation("TripCreator")
+  createdMaintenance Maintenance[]     @relation("MaintenanceCreator")
+  createdFuelLogs    FuelLog[]         @relation("FuelLogCreator")
+  createdPolicies    InsurancePolicy[] @relation("PolicyCreator")
 
   @@index([organizationId])
   @@index([email])
@@ -273,11 +278,13 @@ model Trip {
   actualEnd       DateTime?
   status          TripStatus @default(SCHEDULED)
   notes           String?
+  createdById     String?    @db.Uuid
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
   truck          Truck          @relation(fields: [truckId], references: [id], onDelete: Cascade)
   driver         Driver         @relation(fields: [driverId], references: [id])
+  createdBy      User?          @relation("TripCreator", fields: [createdById], references: [id])
   deliveryProofs DeliveryProof[]
 
   @@index([truckId])
@@ -373,11 +380,13 @@ model Maintenance {
   odometer        Int?
   notes           String?
   insuranceClaimId String?          @db.Uuid
+  createdById     String?           @db.Uuid
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
   truck          Truck           @relation(fields: [truckId], references: [id], onDelete: Cascade)
   insuranceClaim InsuranceClaim? @relation(fields: [insuranceClaimId], references: [id])
+  createdBy      User?           @relation("MaintenanceCreator", fields: [createdById], references: [id])
 
   @@index([truckId])
   @@index([type])
@@ -402,13 +411,28 @@ model FuelLog {
   latitude    Float?
   longitude   Float?
   fueledAt    DateTime @default(now())
+  createdById String?  @db.Uuid
   createdAt   DateTime @default(now())
 
-  truck Truck @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  truck     Truck @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("FuelLogCreator", fields: [createdById], references: [id])
 
   @@index([truckId])
   @@index([fueledAt])
   @@map("fuel_logs")
+}
+
+model FuelStation {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("fuel_stations")
 }
 
 // ============================================================================
@@ -430,11 +454,13 @@ model InsurancePolicy {
   documentS3Key  String?
   notes          String?
   isActive       Boolean   @default(true)
+  createdById    String?   @db.Uuid
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   truck        Truck            @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  createdBy    User?            @relation("PolicyCreator", fields: [createdById], references: [id])
   claims       InsuranceClaim[]
 
   @@index([organizationId])
