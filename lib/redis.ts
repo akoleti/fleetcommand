@@ -155,14 +155,24 @@ export async function deleteRefreshToken(userId: string): Promise<void> {
 
 /**
  * Store latest GPS position in Redis (cache)
+ * Enhanced by GPS-01 for full truck status caching
  */
 export async function cacheGPSPosition(
   truckId: string,
-  position: { lat: number; lng: number; speed?: number; timestamp: Date }
+  position: {
+    lat: number
+    lng: number
+    speed: number
+    heading: number
+    fuelLevel: number
+    ignitionOn: boolean
+    movementStatus: string
+    timestamp: string
+  }
 ): Promise<void> {
   if (!isRedisAvailable()) return
 
-  const key = `gps:latest:${truckId}`
+  const key = `truck:pos:${truckId}`
   const TTL_SECONDS = 120 // 2 minutes
 
   try {
@@ -178,7 +188,7 @@ export async function cacheGPSPosition(
 export async function getGPSPosition(truckId: string): Promise<any | null> {
   if (!isRedisAvailable()) return null
 
-  const key = `gps:latest:${truckId}`
+  const key = `truck:pos:${truckId}`
 
   try {
     const data = await redis!.get(key)
@@ -186,6 +196,70 @@ export async function getGPSPosition(truckId: string): Promise<any | null> {
   } catch (error) {
     console.error('Redis getGPSPosition error:', error)
     return null
+  }
+}
+
+/**
+ * Get all truck positions from Redis cache (fleet view)
+ * GPS-01: Fast fleet dashboard without DB queries
+ */
+export async function getAllTruckPositions(): Promise<any[]> {
+  if (!isRedisAvailable()) return []
+
+  try {
+    // Scan for all truck:pos:* keys
+    const keys = await redis!.keys('truck:pos:*')
+    
+    if (keys.length === 0) {
+      return []
+    }
+
+    // Batch get all positions
+    const positions = await redis!.mGet(keys)
+    
+    return positions
+      .filter((pos): pos is string => pos !== null)
+      .map(pos => {
+        try {
+          return JSON.parse(pos)
+        } catch {
+          return null
+        }
+      })
+      .filter(pos => pos !== null)
+  } catch (error) {
+    console.error('Redis getAllTruckPositions error:', error)
+    return []
+  }
+}
+
+/**
+ * Delete truck position from cache
+ */
+export async function deleteTruckPosition(truckId: string): Promise<void> {
+  if (!isRedisAvailable()) return
+
+  const key = `truck:pos:${truckId}`
+
+  try {
+    await redis!.del(key)
+  } catch (error) {
+    console.error('Redis deleteTruckPosition error:', error)
+  }
+}
+
+/**
+ * Update truck position TTL (extend cache)
+ */
+export async function extendTruckPositionTTL(truckId: string, ttlSeconds: number = 120): Promise<void> {
+  if (!isRedisAvailable()) return
+
+  const key = `truck:pos:${truckId}`
+
+  try {
+    await redis!.expire(key, ttlSeconds)
+  } catch (error) {
+    console.error('Redis extendTruckPositionTTL error:', error)
   }
 }
 
