@@ -52,6 +52,14 @@ const statusConfig: Record<string, { bg: string; text: string; dot: string }> = 
   CANCELLED: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
 }
 
+interface TruckOption {
+  id: string
+  make: string
+  model: string
+  licensePlate: string
+  status: string
+}
+
 export default function DriverDetailPage() {
   const params = useParams()
   const driverId = params?.id as string
@@ -59,6 +67,11 @@ export default function DriverDetailPage() {
   const [driver, setDriver] = useState<Driver | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [assignModalOpen, setAssignModalOpen] = useState(false)
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [selectedTruckId, setSelectedTruckId] = useState('')
+  const [assignLoading, setAssignLoading] = useState(false)
+  const [assignError, setAssignError] = useState<string | null>(null)
 
   useEffect(() => {
     if (driverId) fetchDriver()
@@ -82,6 +95,59 @@ export default function DriverDetailPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const openAssignModal = async () => {
+    setAssignModalOpen(true)
+    setAssignError(null)
+    setSelectedTruckId('')
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch('/api/trucks?limit=100&status=all', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setTrucks((data.data || []).filter((t: TruckOption) => t.status === 'ACTIVE'))
+      }
+    } catch {}
+  }
+
+  const handleAssign = async () => {
+    if (!selectedTruckId) return
+    setAssignLoading(true)
+    setAssignError(null)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch(`/api/trucks/${selectedTruckId}/assign`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setAssignError(data.error || 'Failed to assign truck')
+        return
+      }
+      setAssignModalOpen(false)
+      fetchDriver()
+    } catch {
+      setAssignError('An unexpected error occurred')
+    } finally {
+      setAssignLoading(false)
+    }
+  }
+
+  const handleUnassign = async (truckId: string) => {
+    try {
+      const token = localStorage.getItem('accessToken')
+      await fetch(`/api/trucks/${truckId}/assign`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId: null }),
+      })
+      fetchDriver()
+    } catch {}
   }
 
   if (loading) {
@@ -234,9 +300,22 @@ export default function DriverDetailPage() {
                 <p className="mt-2 text-sm text-slate-500">No truck assigned</p>
               </div>
             )}
-            <button className="mt-4 w-full rounded-xl border-2 border-dashed border-slate-200 px-4 py-2.5 text-sm font-medium text-brand-600 hover:border-brand-300 hover:bg-brand-50 transition-colors">
-              {driver.assignedTrucks?.length > 0 ? 'Reassign Truck' : 'Assign Truck'}
-            </button>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={openAssignModal}
+                className="flex-1 rounded-xl border-2 border-dashed border-slate-200 px-4 py-2.5 text-sm font-medium text-brand-600 hover:border-brand-300 hover:bg-brand-50 transition-colors"
+              >
+                {driver.assignedTrucks?.length > 0 ? 'Reassign Truck' : 'Assign Truck'}
+              </button>
+              {driver.assignedTrucks?.length > 0 && (
+                <button
+                  onClick={() => handleUnassign(driver.assignedTrucks[0].id)}
+                  className="rounded-xl border border-red-200 px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  Unassign
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -297,6 +376,58 @@ export default function DriverDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Assign Truck Modal */}
+      {assignModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setAssignModalOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">
+              {driver.assignedTrucks?.length > 0 ? 'Reassign Truck' : 'Assign Truck'}
+            </h3>
+
+            {assignError && (
+              <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                {assignError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Select Truck</label>
+              <select
+                value={selectedTruckId}
+                onChange={(e) => setSelectedTruckId(e.target.value)}
+                className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
+              >
+                <option value="">Choose a truck...</option>
+                {trucks.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.make} {t.model} — {t.licensePlate}
+                  </option>
+                ))}
+              </select>
+              {trucks.length === 0 && (
+                <p className="mt-2 text-xs text-slate-400">No active trucks available</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setAssignModalOpen(false)}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssign}
+                disabled={!selectedTruckId || assignLoading}
+                className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {assignLoading ? 'Assigning...' : 'Assign'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

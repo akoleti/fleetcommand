@@ -58,7 +58,7 @@ export const GET = withAuth(async (request) => {
   }
 })
 
-export const POST = withRole(UserRole.OWNER, UserRole.MANAGER)(async (request) => {
+export const POST = withRole(UserRole.OWNER, UserRole.MANAGER, UserRole.DRIVER)(async (request) => {
   try {
     const { user } = request
     const body = await request.json()

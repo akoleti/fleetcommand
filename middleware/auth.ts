@@ -61,9 +61,9 @@ function forbiddenResponse(message: string, code: string): NextResponse<AuthErro
  * Returns user payload if valid, or NextResponse error
  */
 export function withAuth(
-  handler: (request: AuthenticatedRequest) => Promise<NextResponse>
+  handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>
 ) {
-  return async (request: NextRequest): Promise<NextResponse> => {
+  return async (request: NextRequest, context?: any): Promise<NextResponse> => {
     const token = extractBearerToken(request)
     
     if (!token) {
@@ -76,11 +76,10 @@ export function withAuth(
       return unauthorizedResponse('Invalid or expired token', 'INVALID_TOKEN')
     }
 
-    // Attach user to request
     const authenticatedRequest = request as AuthenticatedRequest
     authenticatedRequest.user = payload
 
-    return handler(authenticatedRequest)
+    return handler(authenticatedRequest, context)
   }
 }
 
@@ -91,9 +90,9 @@ export function withRole(...allowedRoles: UserRole[]) {
   const roleCheck = requireRole(...allowedRoles)
   
   return function (
-    handler: (request: AuthenticatedRequest) => Promise<NextResponse>
+    handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>
   ) {
-    return async (request: NextRequest): Promise<NextResponse> => {
+    return async (request: NextRequest, context?: any): Promise<NextResponse> => {
       const token = extractBearerToken(request)
       
       if (!token) {
@@ -116,7 +115,7 @@ export function withRole(...allowedRoles: UserRole[]) {
       const authenticatedRequest = request as AuthenticatedRequest
       authenticatedRequest.user = payload
 
-      return handler(authenticatedRequest)
+      return handler(authenticatedRequest, context)
     }
   }
 }
@@ -128,9 +127,9 @@ export function withPermission(action: Action, resource: Resource) {
   const permissionCheck = requirePermission(action, resource)
   
   return function (
-    handler: (request: AuthenticatedRequest) => Promise<NextResponse>
+    handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>
   ) {
-    return async (request: NextRequest): Promise<NextResponse> => {
+    return async (request: NextRequest, context?: any): Promise<NextResponse> => {
       const token = extractBearerToken(request)
       
       if (!token) {
@@ -153,7 +152,7 @@ export function withPermission(action: Action, resource: Resource) {
       const authenticatedRequest = request as AuthenticatedRequest
       authenticatedRequest.user = payload
 
-      return handler(authenticatedRequest)
+      return handler(authenticatedRequest, context)
     }
   }
 }

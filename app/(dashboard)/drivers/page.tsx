@@ -36,6 +36,15 @@ const statusConfig: Record<string, { bg: string; text: string; dot: string }> = 
   SUSPENDED: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
 }
 
+const initialFormState = {
+  name: '',
+  email: '',
+  password: '',
+  licenseNumber: '',
+  licenseExpiry: '',
+  phone: '',
+}
+
 export default function DriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,6 +53,11 @@ export default function DriversPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [addForm, setAddForm] = useState(initialFormState)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     fetchDrivers()
@@ -77,6 +91,43 @@ export default function DriversPage() {
     }
   }
 
+  const handleAddDriver = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    setAddError(null)
+
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch('/api/drivers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(addForm),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        if (body?.code === 'EMAIL_EXISTS') {
+          throw new Error('A driver with this email already exists.')
+        }
+        throw new Error(body?.message || 'Failed to create driver')
+      }
+
+      setShowAddModal(false)
+      setAddForm(initialFormState)
+      fetchDrivers()
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const updateField = (field: string, value: string) =>
+    setAddForm((prev) => ({ ...prev, [field]: value }))
+
   const filters = ['all', 'available', 'on_trip', 'off_duty']
 
   return (
@@ -91,6 +142,7 @@ export default function DriversPage() {
         </div>
         <button
           type="button"
+          onClick={() => { setShowAddModal(true); setAddError(null) }}
           className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -279,6 +331,111 @@ export default function DriversPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Add Driver Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowAddModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-slate-900">Add Driver</h2>
+            <p className="mt-1 text-sm text-slate-500">Create a new driver account.</p>
+
+            {addError && (
+              <div className="mt-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                {addError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddDriver} className="mt-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={addForm.name}
+                    onChange={(e) => updateField('name', e.target.value)}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Phone</label>
+                  <input
+                    type="tel"
+                    required
+                    value={addForm.phone}
+                    onChange={(e) => updateField('phone', e.target.value)}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={addForm.email}
+                  onChange={(e) => updateField('email', e.target.value)}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={addForm.password}
+                  onChange={(e) => updateField('password', e.target.value)}
+                  placeholder="Min 8 characters"
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">License Number</label>
+                  <input
+                    type="text"
+                    required
+                    value={addForm.licenseNumber}
+                    onChange={(e) => updateField('licenseNumber', e.target.value)}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">License Expiry</label>
+                  <input
+                    type="date"
+                    required
+                    value={addForm.licenseExpiry}
+                    onChange={(e) => updateField('licenseExpiry', e.target.value)}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {submitting ? 'Creating…' : 'Add Driver'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

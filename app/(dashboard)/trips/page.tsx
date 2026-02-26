@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 
 interface Trip {
@@ -21,6 +21,51 @@ interface PaginatedResponse {
   pagination: { page: number; limit: number; total: number; totalPages: number }
 }
 
+interface TruckOption {
+  id: string
+  make: string
+  model: string
+  licensePlate: string
+}
+
+interface DriverOption {
+  id: string
+  name: string
+}
+
+interface ScheduleForm {
+  truckId: string
+  driverId: string
+  originAddress: string
+  originLat: string
+  originLng: string
+  destinationAddress: string
+  destinationLat: string
+  destinationLng: string
+  scheduledStart: string
+  scheduledEnd: string
+  notes: string
+}
+
+const emptyForm: ScheduleForm = {
+  truckId: '',
+  driverId: '',
+  originAddress: '',
+  originLat: '',
+  originLng: '',
+  destinationAddress: '',
+  destinationLat: '',
+  destinationLng: '',
+  scheduledStart: '',
+  scheduledEnd: '',
+  notes: '',
+}
+
+const errorMessages: Record<string, string> = {
+  TRUCK_NOT_AVAILABLE: 'The selected truck is not available for this time period.',
+  DRIVER_NOT_AVAILABLE: 'The selected driver is not available for this time period.',
+}
+
 const statusConfig: Record<string, { bg: string; text: string; dot: string }> = {
   SCHEDULED: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
   IN_PROGRESS: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
@@ -36,6 +81,14 @@ export default function TripsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form, setForm] = useState<ScheduleForm>(emptyForm)
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [modalLoading, setModalLoading] = useState(false)
+  const [modalError, setModalError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     fetchTrips()
@@ -69,6 +122,75 @@ export default function TripsPage() {
     }
   }
 
+  const openModal = useCallback(async () => {
+    setModalOpen(true)
+    setForm(emptyForm)
+    setModalError(null)
+    setModalLoading(true)
+    const token = localStorage.getItem('accessToken')
+    const headers = { Authorization: `Bearer ${token}` }
+    try {
+      const [trucksRes, driversRes] = await Promise.all([
+        fetch('/api/trucks?limit=100', { headers }),
+        fetch('/api/drivers?status=available&limit=100', { headers }),
+      ])
+      if (!trucksRes.ok || !driversRes.ok) throw new Error('Failed to load form data')
+      const trucksData = await trucksRes.json()
+      const driversData = await driversRes.json()
+      setTrucks(trucksData.data ?? trucksData)
+      setDrivers(driversData.data ?? driversData)
+    } catch {
+      setModalError('Failed to load trucks or drivers.')
+    } finally {
+      setModalLoading(false)
+    }
+  }, [])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    setModalError(null)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const body: Record<string, unknown> = {
+        truckId: form.truckId,
+        driverId: form.driverId,
+        originAddress: form.originAddress,
+        originLat: parseFloat(form.originLat),
+        originLng: parseFloat(form.originLng),
+        destinationAddress: form.destinationAddress,
+        destinationLat: parseFloat(form.destinationLat),
+        destinationLng: parseFloat(form.destinationLng),
+        scheduledStart: new Date(form.scheduledStart).toISOString(),
+      }
+      if (form.scheduledEnd) body.scheduledEnd = new Date(form.scheduledEnd).toISOString()
+      if (form.notes) body.notes = form.notes
+
+      const res = await fetch('/api/trips', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        const code = err?.code || err?.error?.code || ''
+        throw new Error(errorMessages[code] || err?.message || err?.error?.message || 'Failed to schedule trip')
+      }
+      setModalOpen(false)
+      fetchTrips()
+    } catch (err) {
+      setModalError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const updateField = (field: keyof ScheduleForm, value: string) =>
+    setForm((prev) => ({ ...prev, [field]: value }))
+
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr)
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -89,6 +211,7 @@ export default function TripsPage() {
         </div>
         <button
           type="button"
+          onClick={openModal}
           className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -264,6 +387,196 @@ export default function TripsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
           </button>
+        </div>
+      )}
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setModalOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold text-slate-900">Schedule Trip</h2>
+              <button type="button" onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {modalError && (
+              <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 mb-4">
+                {modalError}
+              </div>
+            )}
+
+            {modalLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-brand-600" />
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Truck</label>
+                    <select
+                      required
+                      value={form.truckId}
+                      onChange={(e) => updateField('truckId', e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                    >
+                      <option value="">Select a truck</option>
+                      {trucks.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.make} {t.model} — {t.licensePlate}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Driver</label>
+                    <select
+                      required
+                      value={form.driverId}
+                      onChange={(e) => updateField('driverId', e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                    >
+                      <option value="">Select a driver</option>
+                      {drivers.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800 mb-3">Origin</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Address</label>
+                      <input
+                        type="text"
+                        required
+                        value={form.originAddress}
+                        onChange={(e) => updateField('originAddress', e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Latitude</label>
+                        <input
+                          type="number"
+                          step="any"
+                          required
+                          value={form.originLat}
+                          onChange={(e) => updateField('originLat', e.target.value)}
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Longitude</label>
+                        <input
+                          type="number"
+                          step="any"
+                          required
+                          value={form.originLng}
+                          onChange={(e) => updateField('originLng', e.target.value)}
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800 mb-3">Destination</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Address</label>
+                      <input
+                        type="text"
+                        required
+                        value={form.destinationAddress}
+                        onChange={(e) => updateField('destinationAddress', e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Latitude</label>
+                        <input
+                          type="number"
+                          step="any"
+                          required
+                          value={form.destinationLat}
+                          onChange={(e) => updateField('destinationLat', e.target.value)}
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Longitude</label>
+                        <input
+                          type="number"
+                          step="any"
+                          required
+                          value={form.destinationLng}
+                          onChange={(e) => updateField('destinationLng', e.target.value)}
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Scheduled Start</label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={form.scheduledStart}
+                      onChange={(e) => updateField('scheduledStart', e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Scheduled End <span className="text-slate-400 font-normal">(optional)</span></label>
+                    <input
+                      type="datetime-local"
+                      value={form.scheduledEnd}
+                      onChange={(e) => updateField('scheduledEnd', e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Notes <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <textarea
+                    rows={3}
+                    value={form.notes}
+                    onChange={(e) => updateField('notes', e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {submitting ? 'Scheduling…' : 'Schedule Trip'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       )}
     </div>

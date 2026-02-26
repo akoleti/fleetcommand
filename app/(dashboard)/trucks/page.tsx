@@ -50,6 +50,8 @@ const statusConfig: Record<string, { bg: string; text: string; dot: string }> = 
   INACTIVE: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
 }
 
+const MAKES = ['Freightliner', 'Peterbilt', 'Kenworth', 'Volvo', 'Mack', 'International'] as const
+
 export default function TrucksPage() {
   const [trucks, setTrucks] = useState<Truck[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,6 +60,15 @@ export default function TrucksPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [addForm, setAddForm] = useState({ vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear() })
+  const [addError, setAddError] = useState<string | null>(null)
+  const [addSubmitting, setAddSubmitting] = useState(false)
+
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchTrucks()
@@ -114,6 +125,53 @@ export default function TrucksPage() {
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
   }
 
+  const handleAddTruck = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAddError(null)
+    setAddSubmitting(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch('/api/trucks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(addForm),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error || `Failed to add truck (${res.status})`)
+      }
+      setShowAddModal(false)
+      setAddForm({ vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear() })
+      fetchTrucks()
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setAddSubmitting(false)
+    }
+  }
+
+  const handleDeleteTruck = async (id: string) => {
+    setDeletingId(id)
+    setDeleteError(null)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch(`/api/trucks/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error || `Failed to delete truck (${res.status})`)
+      }
+      setConfirmDeleteId(null)
+      fetchTrucks()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const filters = ['all', 'moving', 'idle', 'alert']
 
   return (
@@ -128,6 +186,7 @@ export default function TrucksPage() {
         </div>
         <button
           type="button"
+          onClick={() => { setShowAddModal(true); setAddError(null) }}
           className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -281,12 +340,42 @@ export default function TrucksPage() {
                       {truck.status === 'IDLE' ? formatIdleTime(truck.idleMinutes) : '-'}
                     </td>
                     <td className="whitespace-nowrap py-4 pl-3 pr-5 text-right">
-                      <Link
-                        href={`/trucks/${truck.id}`}
-                        className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors"
-                      >
-                        View
-                      </Link>
+                      <div className="flex items-center justify-end gap-3">
+                        {confirmDeleteId === truck.id ? (
+                          <span className="flex items-center gap-2">
+                            {deleteError && <span className="text-xs text-red-600">{deleteError}</span>}
+                            <button
+                              onClick={() => handleDeleteTruck(truck.id)}
+                              disabled={deletingId === truck.id}
+                              className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                            >
+                              {deletingId === truck.id ? 'Deleting...' : 'Confirm'}
+                            </button>
+                            <button
+                              onClick={() => { setConfirmDeleteId(null); setDeleteError(null) }}
+                              className="text-xs font-medium text-slate-500 hover:text-slate-700"
+                            >
+                              Cancel
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => { setConfirmDeleteId(truck.id); setDeleteError(null) }}
+                            className="text-slate-400 hover:text-red-600 transition-colors"
+                            title="Delete truck"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
+                          </button>
+                        )}
+                        <Link
+                          href={`/trucks/${truck.id}`}
+                          className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors"
+                        >
+                          View
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -334,6 +423,92 @@ export default function TrucksPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Add Truck Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowAddModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-slate-900">Add Truck</h2>
+            <form onSubmit={handleAddTruck} className="mt-5 space-y-4">
+              {addError && (
+                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                  {addError}
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">VIN</label>
+                <input
+                  type="text"
+                  required
+                  value={addForm.vin}
+                  onChange={(e) => setAddForm({ ...addForm, vin: e.target.value })}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">License Plate</label>
+                <input
+                  type="text"
+                  required
+                  value={addForm.licensePlate}
+                  onChange={(e) => setAddForm({ ...addForm, licensePlate: e.target.value })}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Make</label>
+                  <select
+                    value={addForm.make}
+                    onChange={(e) => setAddForm({ ...addForm, make: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                  >
+                    {MAKES.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Model</label>
+                  <input
+                    type="text"
+                    required
+                    value={addForm.model}
+                    onChange={(e) => setAddForm({ ...addForm, model: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Year</label>
+                <input
+                  type="number"
+                  required
+                  value={addForm.year}
+                  onChange={(e) => setAddForm({ ...addForm, year: parseInt(e.target.value) || new Date().getFullYear() })}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addSubmitting}
+                  className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition-colors"
+                >
+                  {addSubmitting ? 'Adding...' : 'Add Truck'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
