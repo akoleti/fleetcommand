@@ -161,6 +161,7 @@ model RefreshToken {
 model Truck {
   id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId  String      @db.Uuid
+  name            String?
   vin             String      @unique
   licensePlate    String
   make            String

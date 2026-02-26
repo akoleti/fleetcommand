@@ -78,6 +78,7 @@ export const GET = withAuth(async (request) => {
     // Search filter
     if (search) {
       where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
         { vin: { contains: search, mode: 'insensitive' } },
         { licensePlate: { contains: search, mode: 'insensitive' } },
         { make: { contains: search, mode: 'insensitive' } },
@@ -180,7 +181,7 @@ export const POST = withRole(UserRole.OWNER)(async (request) => {
     const body = await request.json()
 
     // Validate required fields
-    const { vin, licensePlate, make, model, year } = body
+    const { name, vin, licensePlate, make, model, year } = body
     
     if (!vin || !licensePlate || !make || !model || !year) {
       return NextResponse.json(
@@ -217,6 +218,7 @@ export const POST = withRole(UserRole.OWNER)(async (request) => {
     const truck = await prisma.truck.create({
       data: {
         organizationId: user.organizationId,
+        name: name || null,
         vin,
         licensePlate,
         make,

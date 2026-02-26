@@ -18,7 +18,7 @@ interface RecentAlert {
   title: string
   message: string
   createdAt: string
-  truck?: { licensePlate: string; make: string; model: string }
+  truck?: { id: string; licensePlate: string; make: string; model: string }
 }
 
 const severityConfig: Record<string, { bg: string; text: string; dot: string }> = {
@@ -192,8 +192,12 @@ export default function DashboardPage() {
           <div className="divide-y divide-slate-100">
             {alerts.map((alert) => {
               const sev = severityConfig[alert.severity] || severityConfig.INFO
+              const Wrapper = alert.truck ? Link : 'div' as any
+              const wrapperProps = alert.truck
+                ? { href: `/trucks/${alert.truck.id}`, className: 'block px-6 py-4 flex items-start gap-4 hover:bg-slate-50 transition-colors' }
+                : { className: 'px-6 py-4 flex items-start gap-4' }
               return (
-                <div key={alert.id} className="px-6 py-4 flex items-start gap-4">
+                <Wrapper key={alert.id} {...wrapperProps}>
                   <span className={`mt-0.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${sev.bg} ${sev.text}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${sev.dot}`} />
                     {alert.severity}
@@ -201,11 +205,16 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-900">{alert.title}</p>
                     <p className="mt-0.5 text-sm text-slate-500 truncate">{alert.message}</p>
+                    {alert.truck && (
+                      <p className="mt-1 text-xs font-medium text-brand-600">
+                        {alert.truck.make} {alert.truck.model} — {alert.truck.licensePlate}
+                      </p>
+                    )}
                   </div>
                   <time className="text-xs text-slate-400 whitespace-nowrap">
                     {new Date(alert.createdAt).toLocaleDateString()}
                   </time>
-                </div>
+                </Wrapper>
               )
             })}
           </div>

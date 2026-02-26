@@ -6,6 +6,7 @@ import Link from 'next/link'
 
 interface Truck {
   id: string
+  name: string | null
   vin: string
   licensePlate: string
   make: string
@@ -171,6 +172,9 @@ export default function TruckDetailPage() {
   const [issueSuccess, setIssueSuccess] = useState(false)
   const [issueFormError, setIssueFormError] = useState<string | null>(null)
 
+  // Alerts for this truck (shown in overview)
+  const [truckAlerts, setTruckAlerts] = useState<{ id: string; severity: string; title: string; message: string; createdAt: string; acknowledged: boolean }[]>([])
+
   const fetchedTabs = useRef<Set<TabType>>(new Set())
 
   useEffect(() => {
@@ -227,15 +231,23 @@ export default function TruckDetailPage() {
     try {
       setLoading(true)
       const token = localStorage.getItem('accessToken')
-      const response = await fetch(`/api/trucks/${truckId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const headers = { Authorization: `Bearer ${token}` }
 
-      if (!response.ok) throw new Error('Failed to fetch truck')
+      const [truckRes, alertsRes] = await Promise.all([
+        fetch(`/api/trucks/${truckId}`, { headers }),
+        fetch(`/api/alerts?truckId=${truckId}&limit=10&acknowledged=false`, { headers }),
+      ])
 
-      const data: Truck = await response.json()
+      if (!truckRes.ok) throw new Error('Failed to fetch truck')
+
+      const data: Truck = await truckRes.json()
       setTruck(data)
       setError(null)
+
+      if (alertsRes.ok) {
+        const alertData = await alertsRes.json()
+        setTruckAlerts(alertData.data || [])
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -345,7 +357,7 @@ export default function TruckDetailPage() {
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
         </svg>
-        <span className="text-slate-900 font-medium">{truck.make} {truck.model}</span>
+        <span className="text-slate-900 font-medium">{truck.name || `${truck.make} ${truck.model}`}</span>
       </div>
 
       {/* Header */}
@@ -358,8 +370,13 @@ export default function TruckDetailPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
-              {truck.make} {truck.model} <span className="text-slate-400 font-normal">({truck.year})</span>
+              {truck.name || <>{truck.make} {truck.model} <span className="text-slate-400 font-normal">({truck.year})</span></>}
             </h1>
+            {truck.name && (
+              <p className="mt-0.5 text-sm font-medium text-slate-600">
+                {truck.make} {truck.model} ({truck.year})
+              </p>
+            )}
             <p className="mt-1 text-sm text-slate-500">
               {truck.licensePlate} &middot; VIN: {truck.vin}
             </p>
@@ -390,6 +407,7 @@ export default function TruckDetailPage() {
 
       {/* Tab content */}
       {activeTab === 'overview' && (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Specifications */}
           <div className="rounded-2xl bg-white border border-slate-200 shadow-sm">
@@ -511,6 +529,44 @@ export default function TruckDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Active Alerts for this truck */}
+        {truckAlerts.length > 0 && (
+          <div className="mt-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-slate-900">Active Alerts</h3>
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-xs font-bold text-red-700">{truckAlerts.length}</span>
+              </div>
+              <Link href="/alerts" className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors">View all</Link>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {truckAlerts.map((alert) => {
+                const alertSev = alert.severity === 'CRITICAL'
+                  ? { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' }
+                  : alert.severity === 'WARNING'
+                    ? { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' }
+                    : { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' }
+                return (
+                  <div key={alert.id} className="px-6 py-3 flex items-start gap-3">
+                    <span className={`mt-0.5 shrink-0 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${alertSev.bg} ${alertSev.text}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${alertSev.dot}`} />
+                      {alert.severity}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900">{alert.title}</p>
+                      <p className="mt-0.5 text-sm text-slate-500 truncate">{alert.message}</p>
+                    </div>
+                    <time className="text-xs text-slate-400 whitespace-nowrap shrink-0">
+                      {new Date(alert.createdAt).toLocaleDateString()}
+                    </time>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+        </>
       )}
 
       {activeTab === 'location' && (

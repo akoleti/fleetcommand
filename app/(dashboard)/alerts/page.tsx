@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface Alert {
   id: string
@@ -208,34 +209,57 @@ export default function AlertsPage() {
             return (
               <div
                 key={alert.id}
-                className={`rounded-2xl bg-white border shadow-sm p-5 transition-colors ${
+                className={`rounded-2xl bg-white border shadow-sm transition-colors ${
                   alert.acknowledged ? 'border-slate-200 opacity-60' : 'border-slate-200'
-                }`}
+                } ${alert.truck ? 'hover:border-brand-300' : ''}`}
               >
-                <div className="flex items-start gap-4">
-                  <span className={`mt-0.5 shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${sev.bg} ${sev.text}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${sev.dot}`} />
-                    {alert.severity}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <h3 className="text-sm font-semibold text-slate-900">{alert.title}</h3>
-                      <time className="text-xs text-slate-400 whitespace-nowrap shrink-0">
-                        {formatTimestamp(alert.createdAt)}
-                      </time>
+                {alert.truck ? (
+                  <Link href={`/trucks/${alert.truck.id}`} className="block p-5">
+                    <div className="flex items-start gap-4">
+                      <span className={`mt-0.5 shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${sev.bg} ${sev.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${sev.dot}`} />
+                        {alert.severity}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-sm font-semibold text-slate-900">{alert.title}</h3>
+                          <time className="text-xs text-slate-400 whitespace-nowrap shrink-0">
+                            {formatTimestamp(alert.createdAt)}
+                          </time>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-600 leading-relaxed">{alert.message}</p>
+                        <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-brand-600">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                          </svg>
+                          {alert.truck.make} {alert.truck.model} — {alert.truck.licensePlate}
+                        </div>
+                      </div>
                     </div>
-                    <p className="mt-1 text-sm text-slate-600 leading-relaxed">{alert.message}</p>
-                    {alert.truck && (
-                      <p className="mt-2 text-xs text-slate-400">
-                        {alert.truck.make} {alert.truck.model} &middot; {alert.truck.licensePlate}
-                      </p>
-                    )}
+                  </Link>
+                ) : (
+                  <div className="p-5">
+                    <div className="flex items-start gap-4">
+                      <span className={`mt-0.5 shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${sev.bg} ${sev.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${sev.dot}`} />
+                        {alert.severity}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-sm font-semibold text-slate-900">{alert.title}</h3>
+                          <time className="text-xs text-slate-400 whitespace-nowrap shrink-0">
+                            {formatTimestamp(alert.createdAt)}
+                          </time>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-600 leading-relaxed">{alert.message}</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
                 {!alert.acknowledged && (
-                  <div className="mt-4 flex justify-end">
+                  <div className="px-5 pb-4 flex justify-end">
                     <button
-                      onClick={() => handleAcknowledge(alert.id)}
+                      onClick={(e) => { e.preventDefault(); handleAcknowledge(alert.id) }}
                       disabled={acknowledging === alert.id}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >

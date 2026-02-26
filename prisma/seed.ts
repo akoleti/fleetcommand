@@ -140,6 +140,14 @@ async function main() {
 
   // ── Trucks ─────────────────────────────────────────────────
   console.log('🚛 Creating 30 trucks...')
+  const TRUCK_NAMES = [
+    'Big Red', 'Thunder', 'Road King', 'Maverick', 'Iron Horse',
+    'Lone Star', 'Blaze', 'Titan', 'Ranger', 'Shadow',
+    'Bullet', 'Storm', 'Eagle', 'Patriot', 'Diesel Dan',
+    'Midnight', 'Viper', 'Phoenix', 'Summit', 'Atlas',
+    'Ghost', 'Apache', 'Nomad', 'Stallion', 'Frontier',
+    'Rebel', 'Canyon', 'Mustang', 'Dakota', 'Ironclad',
+  ]
   const truckStatuses = [TruckStatus.ACTIVE, TruckStatus.ACTIVE, TruckStatus.ACTIVE, TruckStatus.IDLE, TruckStatus.MAINTENANCE, TruckStatus.ACTIVE]
   const trucks = await Promise.all(
     Array.from({ length: 30 }, (_, i) => {
@@ -147,6 +155,7 @@ async function main() {
       return prisma.truck.create({
         data: {
           organizationId: org.id,
+          name: TRUCK_NAMES[i],
           vin: generateVIN(),
           licensePlate: generatePlate(),
           make,

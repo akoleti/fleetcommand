@@ -5,6 +5,7 @@ import Link from 'next/link'
 
 interface Truck {
   id: string
+  name: string | null
   vin: string
   licensePlate: string
   make: string
@@ -62,7 +63,7 @@ export default function TrucksPage() {
   const [totalPages, setTotalPages] = useState(1)
 
   const [showAddModal, setShowAddModal] = useState(false)
-  const [addForm, setAddForm] = useState({ vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear() })
+  const [addForm, setAddForm] = useState({ name: '', vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear() })
   const [addError, setAddError] = useState<string | null>(null)
   const [addSubmitting, setAddSubmitting] = useState(false)
 
@@ -134,14 +135,14 @@ export default function TrucksPage() {
       const res = await fetch('/api/trucks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(addForm),
+        body: JSON.stringify({ ...addForm, name: addForm.name.trim() || null }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => null)
         throw new Error(body?.error || `Failed to add truck (${res.status})`)
       }
       setShowAddModal(false)
-      setAddForm({ vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear() })
+      setAddForm({ name: '', vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear() })
       fetchTrucks()
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'An error occurred')
@@ -295,7 +296,7 @@ export default function TrucksPage() {
                     <td className="whitespace-nowrap py-4 pl-5 pr-3">
                       <Link href={`/trucks/${truck.id}`} className="group">
                         <div className="font-medium text-slate-900 group-hover:text-brand-600 transition-colors">
-                          {truck.make} {truck.model}
+                          {truck.name || `${truck.make} ${truck.model}`}
                         </div>
                         <div className="text-xs text-slate-500 mt-0.5">{truck.licensePlate}</div>
                       </Link>
@@ -437,6 +438,16 @@ export default function TrucksPage() {
                   {addError}
                 </div>
               )}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Name <span className="text-slate-400 font-normal">(optional)</span></label>
+                <input
+                  type="text"
+                  value={addForm.name}
+                  onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                  placeholder="e.g. Big Red"
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">VIN</label>
                 <input

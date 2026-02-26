@@ -1,6 +1,15 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
+
+interface TruckOption {
+  id: string
+  name: string | null
+  make: string
+  model: string
+  licensePlate: string
+  vin: string
+}
 
 type ReportType = 'fleet' | 'truck' | 'fuel'
 
@@ -48,6 +57,56 @@ export default function ReportsPage() {
   const [reportTitle, setReportTitle] = useState('')
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
+  const [truckSearch, setTruckSearch] = useState('')
+  const [truckResults, setTruckResults] = useState<TruckOption[]>([])
+  const [truckSearchLoading, setTruckSearchLoading] = useState(false)
+  const [selectedTruck, setSelectedTruck] = useState<TruckOption | null>(null)
+  const [showTruckDropdown, setShowTruckDropdown] = useState(false)
+  const truckDropdownRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const searchTrucks = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setTruckResults([])
+      return
+    }
+    setTruckSearchLoading(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const params = new URLSearchParams({ search: query, limit: '10' })
+      const res = await fetch(`/api/trucks?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const trucks: TruckOption[] = (data.data ?? data).map((t: TruckOption) => ({
+          id: t.id, name: t.name, make: t.make, model: t.model, licensePlate: t.licensePlate, vin: t.vin,
+        }))
+        setTruckResults(trucks)
+        setShowTruckDropdown(true)
+      }
+    } catch { /* ignore */ } finally {
+      setTruckSearchLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedTruck) return
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => searchTrucks(truckSearch), 300)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [truckSearch, searchTrucks, selectedTruck])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (truckDropdownRef.current && !truckDropdownRef.current.contains(e.target as Node)) {
+        setShowTruckDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const getHeaders = () => {
     const token = localStorage.getItem('accessToken')
     return {
@@ -62,8 +121,8 @@ export default function ReportsPage() {
       return
     }
 
-    if (selectedType === 'truck' && !truckId.trim()) {
-      setError('Please enter a truck ID.')
+    if (selectedType === 'truck' && !truckId) {
+      setError('Please search and select a truck.')
       return
     }
 
@@ -181,20 +240,83 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* Truck ID (conditional) */}
+        {/* Truck Selector (conditional) */}
         {selectedType === 'truck' && (
-          <div className="mt-4">
-            <label htmlFor="truckId" className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-              Truck ID
+          <div className="mt-4" ref={truckDropdownRef}>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+              Truck
             </label>
-            <input
-              id="truckId"
-              type="text"
-              value={truckId}
-              onChange={(e) => setTruckId(e.target.value)}
-              placeholder="Enter truck UUID"
-              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
-            />
+            <div className="relative">
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+                <input
+                  type="text"
+                  value={truckSearch}
+                  onChange={(e) => {
+                    setTruckSearch(e.target.value)
+                    if (selectedTruck) {
+                      setSelectedTruck(null)
+                      setTruckId('')
+                    }
+                  }}
+                  onFocus={() => { if (truckResults.length > 0 && !selectedTruck) setShowTruckDropdown(true) }}
+                  placeholder="Search by name, VIN, or license plate…"
+                  className="block w-full rounded-xl border border-slate-300 bg-white pl-10 pr-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                />
+                {truckSearchLoading && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
+                  </div>
+                )}
+              </div>
+
+              {showTruckDropdown && truckResults.length > 0 && !selectedTruck && (
+                <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg max-h-60 overflow-y-auto">
+                  {truckResults.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTruck(t)
+                        setTruckId(t.id)
+                        setTruckSearch(t.name || `${t.make} ${t.model}`)
+                        setShowTruckDropdown(false)
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
+                    >
+                      <div className="text-sm font-medium text-slate-900">{t.name || `${t.make} ${t.model}`}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{t.licensePlate} &middot; VIN: {t.vin}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {showTruckDropdown && truckResults.length === 0 && truckSearch.trim() && !truckSearchLoading && !selectedTruck && (
+                <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg px-4 py-3">
+                  <p className="text-sm text-slate-500">No trucks found</p>
+                </div>
+              )}
+            </div>
+
+            {selectedTruck && (
+              <div className="mt-2 flex items-center gap-3 rounded-xl bg-brand-50 border border-brand-200 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-brand-900">{selectedTruck.name || `${selectedTruck.make} ${selectedTruck.model}`}</p>
+                  <p className="text-xs text-brand-700/70 mt-0.5">{selectedTruck.licensePlate} &middot; VIN: {selectedTruck.vin}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedTruck(null); setTruckId(''); setTruckSearch('') }}
+                  className="shrink-0 text-brand-600 hover:text-brand-800 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
