@@ -230,12 +230,14 @@ export async function generateTruckReport(
   const fuelByDate = [...fuelLogs].sort(
     (a, b) => new Date(a.fueledAt).getTime() - new Date(b.fueledAt).getTime()
   )
-  const odometerStart = fuelByDate.length > 0 ? fuelByDate[0].odometer : null
-  const odometerEnd = fuelByDate.length > 0 ? fuelByDate[fuelByDate.length - 1].odometer : null
-  const milesDriven =
-    odometerStart != null && odometerEnd != null && odometerEnd >= odometerStart
-      ? odometerEnd - odometerStart
-      : null
+  let milesDriven: number | null = null
+  if (fuelByDate.length >= 2) {
+    milesDriven = 0
+    for (let i = 1; i < fuelByDate.length; i++) {
+      const delta = fuelByDate[i].odometer - fuelByDate[i - 1].odometer
+      if (delta > 0) milesDriven += delta
+    }
+  }
 
   body += `<h2>Truck History Summary</h2><div class="grid">`
   body += statCard('Drivers Who Drove', uniqueDrivers.length > 0 ? uniqueDrivers.join(', ') : 'None')

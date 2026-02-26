@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 
@@ -38,15 +38,6 @@ const navItems = [
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/alerts',
-    label: 'Alerts',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
       </svg>
     ),
   },
@@ -96,7 +87,11 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
+  const [user, setUser] = useState<{ name: string | null; email: string } | null>(null)
+  const [alertCount, setAlertCount] = useState(0)
+  const userMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken')
@@ -106,6 +101,29 @@ export default function DashboardLayout({
       setAuthChecked(true)
     }
   }, [router])
+
+  useEffect(() => {
+    if (!authChecked) return
+    const token = localStorage.getItem('accessToken')
+    const headers = { Authorization: `Bearer ${token}` }
+    Promise.all([
+      fetch('/api/auth/me', { headers }).then((r) => r.ok ? r.json() : null),
+      fetch('/api/dashboard/stats', { headers }).then((r) => r.ok ? r.json() : null),
+    ]).then(([userData, statsData]) => {
+      if (userData) setUser({ name: userData.name, email: userData.email })
+      if (statsData?.alerts?.unacknowledged != null) setAlertCount(statsData.alerts.unacknowledged)
+    })
+  }, [authChecked])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [])
 
   if (!authChecked) {
     return (
@@ -121,8 +139,8 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen h-full flex flex-col bg-slate-50">
       {/* Top navigation */}
-      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-slate-200/80">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-slate-200/80 w-full">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo + nav */}
             <div className="flex items-center gap-8">
@@ -157,22 +175,96 @@ export default function DashboardLayout({
               </div>
             </div>
 
-            {/* Right side */}
-            <div className="flex items-center gap-3">
-              {/* Logout */}
-              <button
-                onClick={() => {
-                  localStorage.removeItem('accessToken')
-                  fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
-                  router.replace('/login')
-                }}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            {/* Right side: Alerts + User */}
+            <div className="flex items-center gap-2">
+              {/* Alerts icon with badge */}
+              <Link
+                href="/alerts"
+                className="relative p-2 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                title="Alerts"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                 </svg>
-                <span className="hidden sm:inline">Logout</span>
-              </button>
+                {alertCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
+                    {alertCount > 99 ? '99+' : alertCount}
+                  </span>
+                )}
+              </Link>
+
+              {/* User dropdown */}
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center">
+                    <span className="text-sm font-semibold text-brand-700">
+                      {user?.name ? user.name.charAt(0).toUpperCase() : user?.email?.charAt(0).toUpperCase() || '?'}
+                    </span>
+                  </div>
+                  <div className="hidden sm:block text-left">
+                    <p className="text-sm font-medium text-slate-900 leading-tight">
+                      {user?.name || user?.email || 'User'}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate max-w-[120px]">{user?.email}</p>
+                  </div>
+                  <svg className={`w-4 h-4 text-slate-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+                {userMenuOpen && (
+                  <div className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-slate-200 shadow-lg py-1 z-50">
+                    <Link
+                      href="/settings"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                      </svg>
+                      Profile
+                    </Link>
+                    <Link
+                      href="/settings#notifications"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                      </svg>
+                      Notification settings
+                    </Link>
+                    <Link
+                      href="/settings#security"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.649-.6-3.849a11.96 11.96 0 01-2.4 2.4" />
+                      </svg>
+                      Security
+                    </Link>
+                    <div className="border-t border-slate-100 mt-1 pt-1">
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(false)
+                          localStorage.removeItem('accessToken')
+                          fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+                          router.replace('/login')
+                        }}
+                        className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                        </svg>
+                        Log out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Mobile menu toggle */}
               <button

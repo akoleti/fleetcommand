@@ -42,19 +42,22 @@ export const GET = withAuth(async (request) => {
       deliveryCountByTruck[trip.truckId] = (deliveryCountByTruck[trip.truckId] ?? 0) + 1
     }
 
-    // Mileage per truck: max(odometer) - min(odometer) from fuel logs
+    // Mileage per truck: sum of miles driven between consecutive fuel logs (odometer delta per fill)
+    // Miles = sum of (odometer[i] - odometer[i-1]) for each fuel-up, sorted by date
     const mileageByTruck: Record<string, number> = {}
-    const logsByTruck = fuelLogs.reduce<Record<string, { min: number; max: number }>>((acc, log) => {
-      if (!acc[log.truckId]) acc[log.truckId] = { min: log.odometer, max: log.odometer }
-      else {
-        acc[log.truckId].min = Math.min(acc[log.truckId].min, log.odometer)
-        acc[log.truckId].max = Math.max(acc[log.truckId].max, log.odometer)
-      }
+    const logsByTruck = fuelLogs.reduce<Record<string, { odometer: number; fueledAt: Date }[]>>((acc, log) => {
+      if (!acc[log.truckId]) acc[log.truckId] = []
+      acc[log.truckId].push({ odometer: log.odometer, fueledAt: log.fueledAt })
       return acc
     }, {})
     for (const t of trucks) {
-      const range = logsByTruck[t.id]
-      mileageByTruck[t.id] = range && range.max >= range.min ? range.max - range.min : 0
+      const logs = (logsByTruck[t.id] || []).sort((a, b) => a.fueledAt.getTime() - b.fueledAt.getTime())
+      let miles = 0
+      for (let i = 1; i < logs.length; i++) {
+        const delta = logs[i].odometer - logs[i - 1].odometer
+        if (delta > 0) miles += delta
+      }
+      mileageByTruck[t.id] = miles
     }
 
     const data = trucks.map((t) => ({

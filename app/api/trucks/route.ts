@@ -99,14 +99,12 @@ export const GET = withAuth(async (request) => {
     if (mileageBucket && MILEAGE_BUCKETS[mileageBucket]) {
       const fuelLogs = await prisma.fuelLog.findMany({
         where: { truck: { organizationId: user.organizationId } },
-        select: { truckId: true, odometer: true },
+        select: { truckId: true, odometer: true, fueledAt: true },
+        orderBy: { fueledAt: 'asc' },
       })
-      const logsByTruck = fuelLogs.reduce<Record<string, { min: number; max: number }>>((acc, log) => {
-        if (!acc[log.truckId]) acc[log.truckId] = { min: log.odometer, max: log.odometer }
-        else {
-          acc[log.truckId].min = Math.min(acc[log.truckId].min, log.odometer)
-          acc[log.truckId].max = Math.max(acc[log.truckId].max, log.odometer)
-        }
+      const logsByTruck = fuelLogs.reduce<Record<string, { odometer: number }[]>>((acc, log) => {
+        if (!acc[log.truckId]) acc[log.truckId] = []
+        acc[log.truckId].push({ odometer: log.odometer })
         return acc
       }, {})
       const bucket = MILEAGE_BUCKETS[mileageBucket]
@@ -115,9 +113,13 @@ export const GET = withAuth(async (request) => {
         select: { id: true },
       })
       const truckIds = allTrucks.filter((t) => {
-        const range = logsByTruck[t.id]
-        const mileage = range && range.max >= range.min ? range.max - range.min : 0
-        return mileage >= bucket.min && mileage <= bucket.max
+        const logs = logsByTruck[t.id] || []
+        let miles = 0
+        for (let i = 1; i < logs.length; i++) {
+          const delta = logs[i].odometer - logs[i - 1].odometer
+          if (delta > 0) miles += delta
+        }
+        return miles >= bucket.min && miles <= bucket.max
       }).map((t) => t.id)
       if (truckIds.length === 0) {
         return NextResponse.json(createPaginatedResult([], 0, { page, limit }))
@@ -221,10 +223,37 @@ export const GET = withAuth(async (request) => {
       prisma.truck.count({ where }),
     ])
 
+    // Fetch fuel logs for mileage (sum of odometer deltas between consecutive fills)
+    const truckIds = trucks.map((t) => t.id)
+    const fuelLogs = truckIds.length > 0
+      ? await prisma.fuelLog.findMany({
+          where: { truckId: { in: truckIds } },
+          select: { truckId: true, odometer: true, fueledAt: true },
+          orderBy: { fueledAt: 'asc' },
+        })
+      : []
+
+    const logsByTruck = fuelLogs.reduce<Record<string, { odometer: number; fueledAt: Date }[]>>((acc, log) => {
+      if (!acc[log.truckId]) acc[log.truckId] = []
+      acc[log.truckId].push({ odometer: log.odometer, fueledAt: log.fueledAt })
+      return acc
+    }, {})
+
+    const mileageByTruck: Record<string, number> = {}
+    for (const tid of truckIds) {
+      const logs = (logsByTruck[tid] || []).sort((a, b) => a.fueledAt.getTime() - b.fueledAt.getTime())
+      let miles = 0
+      for (let i = 1; i < logs.length; i++) {
+        const delta = logs[i].odometer - logs[i - 1].odometer
+        if (delta > 0) miles += delta
+      }
+      mileageByTruck[tid] = miles
+    }
+
     // Calculate idle time for idle trucks
     const trucksWithIdleTime = trucks.map((truck) => {
       let idleMinutes = null
-      
+
       if (truck.truckStatus && truck.status === TruckStatus.IDLE) {
         const idleMs = Date.now() - truck.truckStatus.lastPingAt.getTime()
         idleMinutes = Math.floor(idleMs / 60000)
@@ -233,6 +262,7 @@ export const GET = withAuth(async (request) => {
       return {
         ...truck,
         idleMinutes,
+        mileage: mileageByTruck[truck.id] ?? 0,
       }
     })
 
