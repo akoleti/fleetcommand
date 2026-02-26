@@ -1,10 +1,3 @@
-/**
- * Driver Detail Page
- * Owner: FLEET-01
- * 
- * FL-07: Driver profile with stats and trip history
- */
-
 'use client'
 
 import React, { useState, useEffect } from 'react'
@@ -48,18 +41,27 @@ interface Driver {
   daysUntilLicenseExpiry: number
 }
 
+const statusConfig: Record<string, { bg: string; text: string; dot: string }> = {
+  AVAILABLE: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  ON_TRIP: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
+  OFF_DUTY: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
+  SUSPENDED: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
+  SCHEDULED: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
+  IN_PROGRESS: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
+  COMPLETED: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  CANCELLED: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
+}
+
 export default function DriverDetailPage() {
   const params = useParams()
   const driverId = params?.id as string
-  
+
   const [driver, setDriver] = useState<Driver | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (driverId) {
-      fetchDriver()
-    }
+    if (driverId) fetchDriver()
   }, [driverId])
 
   const fetchDriver = async () => {
@@ -67,14 +69,10 @@ export default function DriverDetailPage() {
       setLoading(true)
       const token = localStorage.getItem('accessToken')
       const response = await fetch(`/api/drivers/${driverId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch driver')
-      }
+      if (!response.ok) throw new Error('Failed to fetch driver')
 
       const data: Driver = await response.json()
       setDriver(data)
@@ -86,95 +84,96 @@ export default function DriverDetailPage() {
     }
   }
 
-  const getStatusColor = (status: string): string => {
-    const colors: Record<string, string> = {
-      'AVAILABLE': 'bg-green-100 text-green-800',
-      'ON_TRIP': 'bg-blue-100 text-blue-800',
-      'OFF_DUTY': 'bg-gray-100 text-gray-800',
-      'SUSPENDED': 'bg-red-100 text-red-800',
-      'SCHEDULED': 'bg-yellow-100 text-yellow-800',
-      'IN_PROGRESS': 'bg-blue-100 text-blue-800',
-      'COMPLETED': 'bg-green-100 text-green-800',
-      'CANCELLED': 'bg-red-100 text-red-800',
-    }
-    return colors[status] || 'bg-gray-100 text-gray-800'
-  }
-
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center py-32">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+          <span className="text-sm text-slate-500">Loading driver profile...</span>
+        </div>
       </div>
     )
   }
 
   if (error || !driver) {
     return (
-      <div className="px-4 sm:px-6 lg:px-8">
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <p className="text-sm text-red-800">{error || 'Driver not found'}</p>
-        </div>
+      <div className="flex items-start gap-3 rounded-2xl bg-danger-50 border border-red-200 px-5 py-4">
+        <svg className="w-5 h-5 text-danger-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+        </svg>
+        <p className="text-sm text-danger-700">{error || 'Driver not found'}</p>
       </div>
     )
   }
 
+  const status = statusConfig[driver.status] || statusConfig.OFF_DUTY
+  const onTimeRate = driver.performanceStats.totalTrips > 0
+    ? Math.round((driver.performanceStats.onTimeTrips / driver.performanceStats.totalTrips) * 100)
+    : 0
+
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="h-20 w-20 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-3xl font-bold">
-              {driver.name.charAt(0)}
-            </div>
-            <div className="ml-6">
-              <h1 className="text-2xl font-bold text-gray-900">{driver.name}</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                License: {driver.licenseNumber} • {driver.phone}
-              </p>
-            </div>
-          </div>
-          <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${getStatusColor(driver.status)}`}>
-            {driver.status}
-          </span>
-        </div>
+    <div>
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
+        <Link href="/drivers" className="hover:text-brand-600 transition-colors">Drivers</Link>
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+        </svg>
+        <span className="text-slate-900 font-medium">{driver.name}</span>
       </div>
 
-      {/* License Expiry Alert */}
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+        <div className="flex items-start gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-2xl font-bold shrink-0">
+            {driver.name.charAt(0)}
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">{driver.name}</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              License: {driver.licenseNumber} &middot; {driver.phone}
+            </p>
+          </div>
+        </div>
+        <span className={`inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1.5 text-sm font-medium ${status.bg} ${status.text}`}>
+          <span className={`w-2 h-2 rounded-full ${status.dot}`} />
+          {driver.status.replace('_', ' ')}
+        </span>
+      </div>
+
+      {/* License expiry alert */}
       {driver.licenseExpiryAlert && (
-        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-md p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-yellow-800">
-                License expires in {driver.daysUntilLicenseExpiry} days ({new Date(driver.licenseExpiry).toLocaleDateString()})
-              </p>
-            </div>
+        <div className="mb-8 flex items-start gap-3 rounded-2xl bg-warning-50 border border-amber-200 px-5 py-4">
+          <svg className="w-5 h-5 text-warning-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-warning-700">License expiring soon</p>
+            <p className="mt-0.5 text-sm text-amber-600">
+              Expires in {driver.daysUntilLicenseExpiry} days ({new Date(driver.licenseExpiry).toLocaleDateString()})
+            </p>
           </div>
         </div>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-sm font-medium text-gray-500">Total Trips</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">{driver.performanceStats.totalTrips}</p>
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Trips</p>
+          <p className="mt-2 text-3xl font-bold text-slate-900 tabular-nums">{driver.performanceStats.totalTrips}</p>
         </div>
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-sm font-medium text-gray-500">On-Time Rate</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">
-            {driver.performanceStats.totalTrips > 0
-              ? Math.round((driver.performanceStats.onTimeTrips / driver.performanceStats.totalTrips) * 100)
-              : 0}%
-          </p>
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">On-Time Rate</p>
+          <div className="mt-2 flex items-end gap-2">
+            <p className="text-3xl font-bold text-slate-900 tabular-nums">{onTimeRate}%</p>
+            {onTimeRate >= 90 && (
+              <span className="mb-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Excellent</span>
+            )}
+          </div>
         </div>
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-sm font-medium text-gray-500">Avg Delivery Time</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Avg Delivery Time</p>
+          <p className="mt-2 text-3xl font-bold text-slate-900 tabular-nums">
             {driver.performanceStats.avgDeliveryTime > 0
               ? `${Math.floor(driver.performanceStats.avgDeliveryTime / 60)}h ${driver.performanceStats.avgDeliveryTime % 60}m`
               : 'N/A'}
@@ -182,95 +181,120 @@ export default function DriverDetailPage() {
         </div>
       </div>
 
-      {/* Profile Details & Assigned Truck */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Profile Details</h3>
-          <dl className="space-y-3">
-            <div className="flex justify-between">
-              <dt className="text-sm text-gray-500">License Number</dt>
-              <dd className="text-sm font-medium text-gray-900">{driver.licenseNumber}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-sm text-gray-500">License Expiry</dt>
-              <dd className="text-sm font-medium text-gray-900">
-                {new Date(driver.licenseExpiry).toLocaleDateString()}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-sm text-gray-500">Phone</dt>
-              <dd className="text-sm font-medium text-gray-900">{driver.phone}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-sm text-gray-500">Status</dt>
-              <dd className="text-sm font-medium text-gray-900">{driver.status}</dd>
-            </div>
+      {/* Two column grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Profile details */}
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm">
+          <div className="px-6 py-4 border-b border-slate-100">
+            <h3 className="font-semibold text-slate-900">Profile Details</h3>
+          </div>
+          <dl className="px-6 py-4 space-y-3">
+            {[
+              ['License Number', driver.licenseNumber],
+              ['License Expiry', new Date(driver.licenseExpiry).toLocaleDateString()],
+              ['Phone', driver.phone],
+              ['Status', driver.status.replace('_', ' ')],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="flex items-center justify-between">
+                <dt className="text-sm text-slate-500">{label}</dt>
+                <dd className="text-sm font-medium text-slate-900">{value}</dd>
+              </div>
+            ))}
           </dl>
         </div>
 
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Assigned Truck</h3>
-          {driver.assignedTrucks && driver.assignedTrucks.length > 0 ? (
-            <div>
-              <Link href={`/trucks/${driver.assignedTrucks[0].id}`} className="text-blue-600 hover:text-blue-900">
-                <p className="text-lg font-medium">{driver.assignedTrucks[0].make} {driver.assignedTrucks[0].model}</p>
-                <p className="text-sm text-gray-500 mt-1">{driver.assignedTrucks[0].licensePlate}</p>
-                <p className="text-xs text-gray-400 mt-1">VIN: {driver.assignedTrucks[0].vin}</p>
+        {/* Assigned truck */}
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm">
+          <div className="px-6 py-4 border-b border-slate-100">
+            <h3 className="font-semibold text-slate-900">Assigned Truck</h3>
+          </div>
+          <div className="px-6 py-4">
+            {driver.assignedTrucks?.length > 0 ? (
+              <Link href={`/trucks/${driver.assignedTrucks[0].id}`} className="group block">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-900 group-hover:text-brand-600 transition-colors">
+                      {driver.assignedTrucks[0].make} {driver.assignedTrucks[0].model} ({driver.assignedTrucks[0].year})
+                    </p>
+                    <p className="text-sm text-slate-500 mt-0.5">{driver.assignedTrucks[0].licensePlate}</p>
+                    <p className="text-xs text-slate-400 mt-0.5 font-mono">VIN: {driver.assignedTrucks[0].vin}</p>
+                  </div>
+                </div>
               </Link>
-            </div>
-          ) : (
-            <p className="text-gray-500">No truck assigned</p>
-          )}
-          <button className="mt-4 w-full px-4 py-2 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50 text-sm font-medium">
-            Assign Truck
-          </button>
+            ) : (
+              <div className="text-center py-4">
+                <svg className="mx-auto h-8 w-8 text-slate-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                </svg>
+                <p className="mt-2 text-sm text-slate-500">No truck assigned</p>
+              </div>
+            )}
+            <button className="mt-4 w-full rounded-xl border-2 border-dashed border-slate-200 px-4 py-2.5 text-sm font-medium text-brand-600 hover:border-brand-300 hover:bg-brand-50 transition-colors">
+              {driver.assignedTrucks?.length > 0 ? 'Reassign Truck' : 'Assign Truck'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Recent Trips */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Trips</h3>
-        {driver.trips && driver.trips.length > 0 ? (
-          <div className="overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-300">
+      {/* Recent trips */}
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm">
+        <div className="px-6 py-4 border-b border-slate-100">
+          <h3 className="font-semibold text-slate-900">Recent Trips</h3>
+        </div>
+        {driver.trips?.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-100">
               <thead>
-                <tr>
-                  <th className="py-3 text-left text-sm font-semibold text-gray-900">Destination</th>
-                  <th className="py-3 text-left text-sm font-semibold text-gray-900">Truck</th>
-                  <th className="py-3 text-left text-sm font-semibold text-gray-900">Scheduled</th>
-                  <th className="py-3 text-left text-sm font-semibold text-gray-900">Status</th>
-                  <th className="py-3 text-left text-sm font-semibold text-gray-900"></th>
+                <tr className="bg-slate-50/50">
+                  <th className="py-3 pl-6 pr-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Destination</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Truck</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Scheduled</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                  <th className="relative py-3 pl-3 pr-6"><span className="sr-only">View</span></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
-                {driver.trips.slice(0, 10).map((trip) => (
-                  <tr key={trip.id}>
-                    <td className="py-3 text-sm text-gray-900">{trip.destinationAddress}</td>
-                    <td className="py-3 text-sm text-gray-500">
-                      {trip.truck.make} {trip.truck.model}
-                      <br />
-                      <span className="text-xs">{trip.truck.licensePlate}</span>
-                    </td>
-                    <td className="py-3 text-sm text-gray-500">
-                      {new Date(trip.scheduledStart).toLocaleDateString()}
-                    </td>
-                    <td className="py-3 text-sm">
-                      <span className={`inline-flex rounded-full px-2 text-xs font-semibold ${getStatusColor(trip.status)}`}>
-                        {trip.status}
-                      </span>
-                    </td>
-                    <td className="py-3 text-sm text-right">
-                      <Link href={`/trips/${trip.id}`} className="text-blue-600 hover:text-blue-900">
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-slate-100">
+                {driver.trips.slice(0, 10).map((trip) => {
+                  const tripStatus = statusConfig[trip.status] || statusConfig.OFF_DUTY
+                  return (
+                    <tr key={trip.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3 pl-6 pr-3 text-sm text-slate-900">{trip.destinationAddress}</td>
+                      <td className="px-3 py-3 text-sm">
+                        <div className="text-slate-700">{trip.truck.make} {trip.truck.model}</div>
+                        <div className="text-xs text-slate-500">{trip.truck.licensePlate}</div>
+                      </td>
+                      <td className="px-3 py-3 text-sm text-slate-600">
+                        {new Date(trip.scheduledStart).toLocaleDateString()}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${tripStatus.bg} ${tripStatus.text}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${tripStatus.dot}`} />
+                          {trip.status.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="py-3 pl-3 pr-6 text-right">
+                        <Link href={`/trips/${trip.id}`} className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors">
+                          View
+                        </Link>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         ) : (
-          <p className="text-gray-500">No trips found</p>
+          <div className="px-6 py-12 text-center">
+            <svg className="mx-auto h-10 w-10 text-slate-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+            </svg>
+            <p className="mt-3 text-sm text-slate-500">No trips found</p>
+          </div>
         )}
       </div>
     </div>

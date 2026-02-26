@@ -14,9 +14,9 @@ import { handlePrismaError } from '@/lib/db'
 import { UserRole, TruckStatus } from '@prisma/client'
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 /**
@@ -31,7 +31,7 @@ interface RouteParams {
 export const GET = withAuth(async (request: NextRequest, { params }: RouteParams) => {
   try {
     const { user } = request
-    const { id } = params
+    const { id } = await params
 
     // Fetch truck with related data
     const truck = await prisma.truck.findUnique({
@@ -90,7 +90,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
 
     return NextResponse.json(truck)
   } catch (error) {
-    console.error(`GET /api/trucks/${params?.id} error:`, error)
+    console.error(`GET /api/trucks/${id} error:`, error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },
@@ -110,7 +110,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
 export const PATCH = withRole(UserRole.OWNER)(async (request: NextRequest, { params }: RouteParams) => {
   try {
     const { user } = request
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
 
     // Check truck exists and belongs to user's org
@@ -172,7 +172,7 @@ export const PATCH = withRole(UserRole.OWNER)(async (request: NextRequest, { par
 
     return NextResponse.json(updatedTruck)
   } catch (error) {
-    console.error(`PATCH /api/trucks/${params?.id} error:`, error)
+    console.error(`PATCH /api/trucks/${id} error:`, error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },
@@ -190,7 +190,7 @@ export const PATCH = withRole(UserRole.OWNER)(async (request: NextRequest, { par
 export const DELETE = withRole(UserRole.OWNER)(async (request: NextRequest, { params }: RouteParams) => {
   try {
     const { user } = request
-    const { id } = params
+    const { id } = await params
 
     // Check truck exists and belongs to user's org
     const existingTruck = await prisma.truck.findUnique({
@@ -236,7 +236,7 @@ export const DELETE = withRole(UserRole.OWNER)(async (request: NextRequest, { pa
       truck: deletedTruck,
     })
   } catch (error) {
-    console.error(`DELETE /api/trucks/${params?.id} error:`, error)
+    console.error(`DELETE /api/trucks/${id} error:`, error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },

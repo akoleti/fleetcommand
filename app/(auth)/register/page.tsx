@@ -1,10 +1,3 @@
-/**
- * Register Page
- * Owner: AUTH-01
- * 
- * User registration form with validation and error handling
- */
-
 'use client'
 
 import { useState } from 'react'
@@ -34,9 +27,7 @@ export default function RegisterPage() {
     watch,
     formState: { errors },
   } = useForm<RegisterFormData>({
-    defaultValues: {
-      role: 'OWNER',
-    },
+    defaultValues: { role: 'OWNER' },
   })
 
   const watchRole = watch('role')
@@ -46,7 +37,6 @@ export default function RegisterPage() {
     setIsLoading(true)
     setErrorMessage(null)
 
-    // Remove confirmPassword before sending to API
     const { confirmPassword, ...registerData } = data
 
     try {
@@ -59,7 +49,6 @@ export default function RegisterPage() {
       const result = await response.json()
 
       if (!response.ok) {
-        // Handle specific error codes
         switch (result.code) {
           case 'EMAIL_EXISTS':
             setErrorMessage('This email is already registered. Please login instead.')
@@ -76,273 +65,216 @@ export default function RegisterPage() {
         return
       }
 
-      // Store access token in memory (not localStorage)
       if (typeof window !== 'undefined') {
         ;(window as any).accessToken = result.accessToken
       }
 
-      // Refresh token is already stored in httpOnly cookie by the server
-
-      // Redirect to dashboard
-      router.push('/dashboard')
-    } catch (error) {
-      console.error('Registration error:', error)
+      router.push('/trucks')
+    } catch {
       setErrorMessage('An unexpected error occurred. Please try again.')
     } finally {
       setIsLoading(false)
     }
   }
 
+  const inputClass = (hasError: boolean) =>
+    `block w-full rounded-xl border px-4 py-2.5 text-sm shadow-sm transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 ${
+      hasError ? 'border-red-300 bg-danger-50' : 'border-slate-300 bg-white'
+    }`
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8 py-12">
-      <div className="max-w-md w-full space-y-8">
+    <>
+      {/* Mobile logo */}
+      <div className="lg:hidden flex items-center gap-3 mb-8">
+        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-600">
+          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+          </svg>
+        </div>
+        <span className="text-xl font-bold text-slate-900">FleetCommand</span>
+      </div>
+
+      <div>
+        <h2 className="text-2xl font-bold text-slate-900">Create your account</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Get started with FleetCommand in minutes.
+        </p>
+      </div>
+
+      {errorMessage && (
+        <div className="mt-6 flex items-start gap-3 rounded-xl bg-danger-50 border border-red-200 px-4 py-3">
+          <svg className="w-5 h-5 text-danger-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+          </svg>
+          <p className="text-sm text-danger-700">{errorMessage}</p>
+        </div>
+      )}
+
+      <form className="mt-8 space-y-4" onSubmit={handleSubmit(onSubmit)}>
+        {/* Role selector */}
         <div>
-          <h1 className="text-center text-4xl font-bold text-gray-900">
-            FleetCommand
-          </h1>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Already have an account?{' '}
-            <Link
-              href="/login"
-              className="font-medium text-blue-600 hover:text-blue-500"
-            >
-              Sign in
-            </Link>
-          </p>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">I am a</label>
+          <div className="grid grid-cols-3 gap-2">
+            {(['OWNER', 'MANAGER', 'DRIVER'] as const).map((role) => (
+              <label
+                key={role}
+                className={`flex items-center justify-center rounded-xl border-2 py-2 text-sm font-medium cursor-pointer transition-all ${
+                  watchRole === role
+                    ? 'border-brand-600 bg-brand-50 text-brand-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <input type="radio" value={role} className="sr-only" {...register('role')} />
+                {role.charAt(0) + role.slice(1).toLowerCase()}
+              </label>
+            ))}
+          </div>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
-          {errorMessage && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="flex">
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">
-                    {errorMessage}
-                  </h3>
-                </div>
-              </div>
-            </div>
-          )}
+        <div>
+          <label htmlFor="name" className="block text-sm font-medium text-slate-700 mb-1.5">Full name</label>
+          <input
+            id="name"
+            type="text"
+            placeholder="John Doe"
+            className={inputClass(!!errors.name)}
+            {...register('name', {
+              required: 'Name is required',
+              minLength: { value: 2, message: 'Name must be at least 2 characters' },
+            })}
+          />
+          {errors.name && <p className="mt-1.5 text-xs text-danger-500">{errors.name.message}</p>}
+        </div>
 
-          <div className="space-y-4">
-            {/* Full Name */}
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Full Name
-              </label>
-              <input
-                id="name"
-                type="text"
-                className={`mt-1 appearance-none block w-full px-3 py-2 border ${
-                  errors.name ? 'border-red-300' : 'border-gray-300'
-                } rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                placeholder="John Doe"
-                {...register('name', {
-                  required: 'Name is required',
-                  minLength: { value: 2, message: 'Name must be at least 2 characters' },
-                })}
-              />
-              {errors.name && (
-                <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
-              )}
-            </div>
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">Email address</label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@company.com"
+            className={inputClass(!!errors.email)}
+            {...register('email', {
+              required: 'Email is required',
+              pattern: {
+                value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                message: 'Invalid email address',
+              },
+            })}
+          />
+          {errors.email && <p className="mt-1.5 text-xs text-danger-500">{errors.email.message}</p>}
+        </div>
 
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                className={`mt-1 appearance-none block w-full px-3 py-2 border ${
-                  errors.email ? 'border-red-300' : 'border-gray-300'
-                } rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                placeholder="you@example.com"
-                {...register('email', {
-                  required: 'Email is required',
-                  pattern: {
-                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                    message: 'Invalid email address',
-                  },
-                })}
-              />
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-              )}
-            </div>
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-slate-700 mb-1.5">
+            Phone <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="phone"
+            type="tel"
+            placeholder="+1 (555) 123-4567"
+            className={inputClass(false)}
+            {...register('phone')}
+          />
+        </div>
 
-            {/* Phone (Optional) */}
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                Phone Number (Optional)
-              </label>
-              <input
-                id="phone"
-                type="tel"
-                className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="+1 (555) 123-4567"
-                {...register('phone')}
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="new-password"
-                className={`mt-1 appearance-none block w-full px-3 py-2 border ${
-                  errors.password ? 'border-red-300' : 'border-gray-300'
-                } rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                placeholder="••••••••"
-                {...register('password', {
-                  required: 'Password is required',
-                  minLength: { value: 8, message: 'Password must be at least 8 characters' },
-                })}
-              />
-              {errors.password && (
-                <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
-              )}
-            </div>
-
-            {/* Confirm Password */}
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
-              </label>
-              <input
-                id="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                className={`mt-1 appearance-none block w-full px-3 py-2 border ${
-                  errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                } rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                placeholder="••••••••"
-                {...register('confirmPassword', {
-                  required: 'Please confirm your password',
-                  validate: (value) => value === password || 'Passwords do not match',
-                })}
-              />
-              {errors.confirmPassword && (
-                <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
-              )}
-            </div>
-
-            {/* Role */}
-            <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700">
-                Role
-              </label>
-              <select
-                id="role"
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                {...register('role', { required: 'Role is required' })}
-              >
-                <option value="OWNER">Owner</option>
-                <option value="MANAGER">Manager</option>
-                <option value="DRIVER">Driver</option>
-              </select>
-              {errors.role && (
-                <p className="mt-1 text-sm text-red-600">{errors.role.message}</p>
-              )}
-            </div>
-
-            {/* Organization Name (for OWNER) */}
-            {watchRole === 'OWNER' && (
-              <div>
-                <label htmlFor="organizationName" className="block text-sm font-medium text-gray-700">
-                  Organization Name
-                </label>
-                <input
-                  id="organizationName"
-                  type="text"
-                  className={`mt-1 appearance-none block w-full px-3 py-2 border ${
-                    errors.organizationName ? 'border-red-300' : 'border-gray-300'
-                  } rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                  placeholder="Acme Trucking Co."
-                  {...register('organizationName', {
-                    required: watchRole === 'OWNER' ? 'Organization name is required' : false,
-                    minLength: { value: 2, message: 'Organization name must be at least 2 characters' },
-                  })}
-                />
-                {errors.organizationName && (
-                  <p className="mt-1 text-sm text-red-600">{errors.organizationName.message}</p>
-                )}
-              </div>
-            )}
-
-            {/* Organization ID (for MANAGER/DRIVER) */}
-            {watchRole !== 'OWNER' && (
-              <div>
-                <label htmlFor="organizationId" className="block text-sm font-medium text-gray-700">
-                  Organization ID
-                </label>
-                <input
-                  id="organizationId"
-                  type="text"
-                  className={`mt-1 appearance-none block w-full px-3 py-2 border ${
-                    errors.organizationId ? 'border-red-300' : 'border-gray-300'
-                  } rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                  placeholder="Get this from your administrator"
-                  {...register('organizationId', {
-                    required: watchRole !== 'OWNER' ? 'Organization ID is required' : false,
-                  })}
-                />
-                {errors.organizationId && (
-                  <p className="mt-1 text-sm text-red-600">{errors.organizationId.message}</p>
-                )}
-                <p className="mt-1 text-xs text-gray-500">
-                  Ask your administrator for the organization ID
-                </p>
-              </div>
-            )}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="8+ characters"
+              className={inputClass(!!errors.password)}
+              {...register('password', {
+                required: 'Password is required',
+                minLength: { value: 8, message: 'Min 8 characters' },
+              })}
+            />
+            {errors.password && <p className="mt-1.5 text-xs text-danger-500">{errors.password.message}</p>}
           </div>
 
           <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <span className="flex items-center">
-                  <svg
-                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Creating account...
-                </span>
-              ) : (
-                'Create account'
-              )}
-            </button>
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 mb-1.5">Confirm</label>
+            <input
+              id="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Repeat password"
+              className={inputClass(!!errors.confirmPassword)}
+              {...register('confirmPassword', {
+                required: 'Please confirm',
+                validate: (value) => value === password || 'Passwords do not match',
+              })}
+            />
+            {errors.confirmPassword && <p className="mt-1.5 text-xs text-danger-500">{errors.confirmPassword.message}</p>}
           </div>
-        </form>
-      </div>
-    </div>
+        </div>
+
+        {watchRole === 'OWNER' && (
+          <div>
+            <label htmlFor="organizationName" className="block text-sm font-medium text-slate-700 mb-1.5">
+              Organization name
+            </label>
+            <input
+              id="organizationName"
+              type="text"
+              placeholder="Acme Trucking Co."
+              className={inputClass(!!errors.organizationName)}
+              {...register('organizationName', {
+                required: watchRole === 'OWNER' ? 'Organization name is required' : false,
+                minLength: { value: 2, message: 'At least 2 characters' },
+              })}
+            />
+            {errors.organizationName && <p className="mt-1.5 text-xs text-danger-500">{errors.organizationName.message}</p>}
+          </div>
+        )}
+
+        {watchRole !== 'OWNER' && (
+          <div>
+            <label htmlFor="organizationId" className="block text-sm font-medium text-slate-700 mb-1.5">
+              Organization ID
+            </label>
+            <input
+              id="organizationId"
+              type="text"
+              placeholder="Ask your administrator"
+              className={inputClass(!!errors.organizationId)}
+              {...register('organizationId', {
+                required: 'Organization ID is required',
+              })}
+            />
+            {errors.organizationId && <p className="mt-1.5 text-xs text-danger-500">{errors.organizationId.message}</p>}
+            <p className="mt-1 text-xs text-slate-400">Get this from your fleet owner or manager</p>
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {isLoading ? (
+            <>
+              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Creating account...
+            </>
+          ) : (
+            'Create account'
+          )}
+        </button>
+      </form>
+
+      <p className="mt-6 text-center text-sm text-slate-500">
+        Already have an account?{' '}
+        <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-500 transition-colors">
+          Sign in
+        </Link>
+      </p>
+    </>
   )
 }

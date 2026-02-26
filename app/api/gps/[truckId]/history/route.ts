@@ -12,11 +12,11 @@ import { prisma } from '@/lib/db'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { truckId: string } }
+  { params }: { params: Promise<{ truckId: string }> }
 ) {
   try {
+    const { truckId } = await params
     const { searchParams } = new URL(request.url)
-    const truckId = params.truckId
 
     // Parse pagination params
     const limit = Math.min(parseInt(searchParams.get('limit') || '100', 10), 1000)
@@ -106,10 +106,10 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { truckId: string } }
+  { params }: { params: Promise<{ truckId: string }> }
 ) {
   try {
-    const truckId = params.truckId
+    const { truckId } = await params
     const body = await request.json()
 
     const { lat, lng, speed, heading, fuelLevel, ignitionOn, timestamp } = body
