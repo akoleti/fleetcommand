@@ -11,15 +11,10 @@ interface DashboardStats {
   fuel: { totalCostThisMonth: number; totalGallonsThisMonth: number }
 }
 
-interface RecentAlert {
-  id: string
-  type: string
-  severity: string
-  title: string
-  message: string
-  createdAt: string
-  truck?: { id: string; licensePlate: string; make: string; model: string }
-}
+type ActivityItem =
+  | { kind: 'alert'; id: string; type: string; severity: string; title: string; message: string; truck?: { id: string; licensePlate: string; make: string; model: string }; timestamp: string }
+  | { kind: 'delivery'; id: string; tripId: string; truck: { id: string; licensePlate: string; make: string; model: string }; driver: { id: string; name: string }; address: string; timestamp: string }
+  | { kind: 'pickup'; id: string; tripId: string; truck: { id: string; licensePlate: string; make: string; model: string }; driver: { id: string; name: string }; address: string; timestamp: string }
 
 const severityConfig: Record<string, { bg: string; text: string; dot: string }> = {
   CRITICAL: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
@@ -29,7 +24,7 @@ const severityConfig: Record<string, { bg: string; text: string; dot: string }> 
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [alerts, setAlerts] = useState<RecentAlert[]>([])
+  const [activity, setActivity] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -41,45 +36,26 @@ export default function DashboardPage() {
       const token = localStorage.getItem('accessToken')
       const headers = { Authorization: `Bearer ${token}` }
 
-      const [trucksRes, driversRes, alertsRes] = await Promise.allSettled([
-        fetch('/api/trucks?limit=100', { headers }),
-        fetch('/api/drivers?limit=100', { headers }),
-        fetch('/api/alerts?limit=5&acknowledged=false', { headers }),
+      const [statsRes, activityRes] = await Promise.allSettled([
+        fetch('/api/dashboard/stats', { headers }),
+        fetch('/api/dashboard/recent-activity', { headers }),
       ])
 
-      const trucksData = trucksRes.status === 'fulfilled' && trucksRes.value.ok
-        ? await trucksRes.value.json() : null
-      const driversData = driversRes.status === 'fulfilled' && driversRes.value.ok
-        ? await driversRes.value.json() : null
-      const alertsData = alertsRes.status === 'fulfilled' && alertsRes.value.ok
-        ? await alertsRes.value.json() : null
+      const statsData = statsRes.status === 'fulfilled' && statsRes.value.ok
+        ? await statsRes.value.json() : null
+      const activityData = activityRes.status === 'fulfilled' && activityRes.value.ok
+        ? await activityRes.value.json() : null
 
-      const truckList = trucksData?.data || []
-      const driverList = driversData?.data || []
-
-      setStats({
-        trucks: {
-          total: truckList.length,
-          active: truckList.filter((t: any) => t.status === 'ACTIVE').length,
-          idle: truckList.filter((t: any) => t.status === 'IDLE').length,
-          maintenance: truckList.filter((t: any) => t.status === 'MAINTENANCE').length,
-          blocked: truckList.filter((t: any) => t.status === 'BLOCKED').length,
-        },
-        drivers: {
-          total: driverList.length,
-          available: driverList.filter((d: any) => d.status === 'AVAILABLE').length,
-          onTrip: driverList.filter((d: any) => d.status === 'ON_TRIP').length,
-          offDuty: driverList.filter((d: any) => d.status === 'OFF_DUTY').length,
-        },
-        trips: { total: 0, scheduled: 0, inProgress: 0, completedToday: 0 },
-        alerts: {
-          unacknowledged: alertsData?.pagination?.total || 0,
-          critical: (alertsData?.data || []).filter((a: any) => a.severity === 'CRITICAL').length,
-          warning: (alertsData?.data || []).filter((a: any) => a.severity === 'WARNING').length,
-        },
-        fuel: { totalCostThisMonth: 0, totalGallonsThisMonth: 0 },
-      })
-      setAlerts(alertsData?.data || [])
+      if (statsData) {
+        setStats({
+          trucks: statsData.trucks ?? { total: 0, active: 0, idle: 0, maintenance: 0, blocked: 0 },
+          drivers: statsData.drivers ?? { total: 0, available: 0, onTrip: 0, offDuty: 0 },
+          trips: statsData.trips ?? { total: 0, scheduled: 0, inProgress: 0, completedToday: 0 },
+          alerts: statsData.alerts ?? { unacknowledged: 0, critical: 0, warning: 0 },
+          fuel: statsData.fuel ?? { totalCostThisMonth: 0, totalGallonsThisMonth: 0 },
+        })
+      }
+      setActivity(activityData?.data || [])
     } catch {
       // Silently handle dashboard fetch errors
     } finally {
@@ -113,7 +89,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Top stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
         <Link href="/trucks" className="group rounded-2xl bg-white border border-slate-200 shadow-sm p-5 hover:border-brand-300 transition-colors">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Trucks</p>
@@ -166,7 +142,7 @@ export default function DashboardPage() {
           </div>
         </Link>
 
-        <Link href="/maintenance" className="group rounded-2xl bg-white border border-slate-200 shadow-sm p-5 hover:border-brand-300 transition-colors">
+        <Link href="/trucks?status=maintenance" className="group rounded-2xl bg-white border border-slate-200 shadow-sm p-5 hover:border-brand-300 transition-colors">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Maintenance</p>
             <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
@@ -178,53 +154,148 @@ export default function DashboardPage() {
           <p className="mt-3 text-3xl font-bold text-slate-900 tabular-nums">{stats?.trucks.maintenance || 0}</p>
           <div className="mt-2 text-xs text-slate-500">trucks in maintenance</div>
         </Link>
+
+        <Link href="/trips" className="group rounded-2xl bg-white border border-slate-200 shadow-sm p-5 hover:border-brand-300 transition-colors">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Trips</p>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+              </svg>
+            </div>
+          </div>
+          <p className="mt-3 text-3xl font-bold text-slate-900 tabular-nums">{stats?.trips.total || 0}</p>
+          <div className="mt-2 flex gap-3 text-xs text-slate-500">
+            <span><span className="font-medium text-amber-600">{stats?.trips.scheduled}</span> scheduled</span>
+            <span><span className="font-medium text-blue-600">{stats?.trips.inProgress}</span> in progress</span>
+            <span><span className="font-medium text-emerald-600">{stats?.trips.completedToday}</span> done today</span>
+          </div>
+        </Link>
+
+        <Link href="/fuel" className="group rounded-2xl bg-white border border-slate-200 shadow-sm p-5 hover:border-brand-300 transition-colors">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Fuel This Month</p>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
+              </svg>
+            </div>
+          </div>
+          <p className="mt-3 text-3xl font-bold text-slate-900 tabular-nums">
+            ${(stats?.fuel.totalCostThisMonth ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <div className="mt-2 text-xs text-slate-500">
+            {(stats?.fuel.totalGallonsThisMonth ?? 0).toLocaleString('en-US', { maximumFractionDigits: 1 })} gal
+          </div>
+        </Link>
       </div>
 
-      {/* Recent alerts */}
-      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm">
+      {/* Recent alerts & activity */}
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-900">Recent Alerts</h2>
+          <h2 className="font-semibold text-slate-900">Recent Alerts & Activity</h2>
           <Link href="/alerts" className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors">
-            View all
+            View all alerts
           </Link>
         </div>
-        {alerts.length > 0 ? (
-          <div className="divide-y divide-slate-100">
-            {alerts.map((alert) => {
-              const sev = severityConfig[alert.severity] || severityConfig.INFO
-              const Wrapper = alert.truck ? Link : 'div' as any
-              const wrapperProps = alert.truck
-                ? { href: `/trucks/${alert.truck.id}`, className: 'block px-6 py-4 flex items-start gap-4 hover:bg-slate-50 transition-colors' }
-                : { className: 'px-6 py-4 flex items-start gap-4' }
-              return (
-                <Wrapper key={alert.id} {...wrapperProps}>
-                  <span className={`mt-0.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${sev.bg} ${sev.text}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${sev.dot}`} />
-                    {alert.severity}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900">{alert.title}</p>
-                    <p className="mt-0.5 text-sm text-slate-500 truncate">{alert.message}</p>
-                    {alert.truck && (
-                      <p className="mt-1 text-xs font-medium text-brand-600">
-                        {alert.truck.make} {alert.truck.model} — {alert.truck.licensePlate}
-                      </p>
-                    )}
-                  </div>
-                  <time className="text-xs text-slate-400 whitespace-nowrap">
-                    {new Date(alert.createdAt).toLocaleDateString()}
-                  </time>
-                </Wrapper>
-              )
-            })}
+        {activity.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Date & Time</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Truck</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {activity.map((item) => {
+                  const ts = new Date(item.timestamp)
+                  const dateStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  const timeStr = ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                  if (item.kind === 'alert') {
+                    const sev = severityConfig[item.severity] || severityConfig.INFO
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/50">
+                        <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{dateStr} {timeStr}</td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${sev.bg} ${sev.text}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${sev.dot}`} />
+                            {item.severity}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-600">
+                          {item.truck ? (
+                            <Link href={`/trucks/${item.truck.id}`} className="font-medium text-brand-600 hover:text-brand-700">
+                              {item.truck.make} {item.truck.model} — {item.truck.licensePlate}
+                            </Link>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-700">
+                          <span className="font-medium text-slate-900">{item.title}</span>
+                          {item.message && <span className="text-slate-500"> — {item.message}</span>}
+                        </td>
+                      </tr>
+                    )
+                  }
+                  if (item.kind === 'delivery') {
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/50">
+                        <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{dateStr} {timeStr}</td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium bg-emerald-50 text-emerald-700">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Delivery
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-600">
+                          <Link href={`/trucks/${item.truck.id}`} className="font-medium text-brand-600 hover:text-brand-700">
+                            {item.truck.make} {item.truck.model} — {item.truck.licensePlate}
+                          </Link>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-700">
+                          <Link href={`/trips/${item.tripId}`} className="text-slate-700 hover:text-brand-600">
+                            Delivered by {item.driver.name} at {item.address}
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  }
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50/50">
+                      <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{dateStr} {timeStr}</td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                          Pickup
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        <Link href={`/trucks/${item.truck.id}`} className="font-medium text-brand-600 hover:text-brand-700">
+                          {item.truck.make} {item.truck.model} — {item.truck.licensePlate}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-700">
+                        <Link href={`/trips/${item.tripId}`} className="text-slate-700 hover:text-brand-600">
+                          Picked up by {item.driver.name} at {item.address}
+                        </Link>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         ) : (
           <div className="px-6 py-12 text-center">
             <svg className="mx-auto h-10 w-10 text-slate-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="mt-3 text-sm text-slate-500">No active alerts</p>
-            <p className="mt-1 text-xs text-slate-400">All clear — your fleet is operating normally.</p>
+            <p className="mt-3 text-sm text-slate-500">No recent activity</p>
+            <p className="mt-1 text-xs text-slate-400">Alerts and delivery/pickup events will appear here.</p>
           </div>
         )}
       </div>

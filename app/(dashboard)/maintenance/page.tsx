@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { fetchWithAuth } from '@/lib/api'
 
 interface Truck {
   id: string
@@ -56,11 +57,6 @@ const typeLabels: Record<string, string> = {
   OTHER: 'Other',
 }
 
-const getHeaders = () => {
-  const token = localStorage.getItem('accessToken')
-  return { Authorization: `Bearer ${token}` }
-}
-
 const formatDate = (dateStr: string) =>
   new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
@@ -90,7 +86,7 @@ export default function MaintenancePage() {
   const fetchTrucks = async () => {
     try {
       setTrucksLoading(true)
-      const res = await fetch('/api/trucks?limit=100', { headers: getHeaders() })
+      const res = await fetchWithAuth('/api/trucks?limit=100')
       if (!res.ok) throw new Error('Failed to fetch trucks')
       const data: PaginatedResponse<Truck> = await res.json()
       setTrucks(data.data)
@@ -108,7 +104,7 @@ export default function MaintenancePage() {
       if (statusFilter !== 'all') params.set('status', statusFilter)
       if (selectedTruckId) params.set('truckId', selectedTruckId)
 
-      const res = await fetch(`/api/maintenance?${params}`, { headers: getHeaders() })
+      const res = await fetchWithAuth(`/api/maintenance?${params}`)
       if (!res.ok) throw new Error('Failed to fetch maintenance records')
 
       const data: PaginatedResponse<MaintenanceRecord> = await res.json()

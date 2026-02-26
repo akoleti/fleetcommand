@@ -64,6 +64,7 @@ export const GET = withAuth(async (request) => {
       const statusMap: Record<string, TruckStatus | TruckStatus[]> = {
         'moving': TruckStatus.ACTIVE,
         'idle': TruckStatus.IDLE,
+        'maintenance': TruckStatus.MAINTENANCE,
         'alert': [TruckStatus.MAINTENANCE, TruckStatus.BLOCKED],
       }
       

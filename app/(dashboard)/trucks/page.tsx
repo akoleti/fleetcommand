@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 interface Truck {
   id: string
@@ -53,11 +54,17 @@ const statusConfig: Record<string, { bg: string; text: string; dot: string }> = 
 
 const MAKES = ['Freightliner', 'Peterbilt', 'Kenworth', 'Volvo', 'Mack', 'International'] as const
 
+const VALID_STATUS_FILTERS = ['all', 'moving', 'idle', 'maintenance', 'alert']
+
 export default function TrucksPage() {
+  const searchParams = useSearchParams()
+  const statusFromUrl = searchParams.get('status')
+  const initialStatus = statusFromUrl && VALID_STATUS_FILTERS.includes(statusFromUrl) ? statusFromUrl : 'all'
+
   const [trucks, setTrucks] = useState<Truck[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState(initialStatus)
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -70,6 +77,12 @@ export default function TrucksPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const urlStatus = searchParams.get('status')
+    const newFilter = urlStatus && VALID_STATUS_FILTERS.includes(urlStatus) ? urlStatus : 'all'
+    setStatusFilter(newFilter)
+  }, [searchParams])
 
   useEffect(() => {
     fetchTrucks()
@@ -180,7 +193,7 @@ export default function TrucksPage() {
     }
   }
 
-  const filters = ['all', 'moving', 'idle', 'alert']
+  const filters = ['all', 'moving', 'idle', 'maintenance', 'alert']
 
   return (
     <div>
