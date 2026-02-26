@@ -181,7 +181,7 @@ export const POST = withRole(UserRole.OWNER)(async (request) => {
     const body = await request.json()
 
     // Validate required fields
-    const { name, vin, licensePlate, make, model, year } = body
+    const { name, vin, licensePlate, make, model, year, fuelTankCapacityGallons, initialFuelLevel, latitude, longitude } = body
     
     if (!vin || !licensePlate || !make || !model || !year) {
       return NextResponse.json(
@@ -214,6 +214,21 @@ export const POST = withRole(UserRole.OWNER)(async (request) => {
       )
     }
 
+    // Validate optional fuel fields
+    const tankCapacity = fuelTankCapacityGallons != null && fuelTankCapacityGallons !== ''
+      ? parseInt(String(fuelTankCapacityGallons), 10)
+      : null
+    const fuelLevel = initialFuelLevel != null && initialFuelLevel !== ''
+      ? Math.max(0, Math.min(100, parseInt(String(initialFuelLevel), 10)))
+      : null
+
+    if (tankCapacity != null && (isNaN(tankCapacity) || tankCapacity < 0)) {
+      return NextResponse.json(
+        { error: 'Fuel tank capacity must be a positive number', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      )
+    }
+
     // Create truck
     const truck = await prisma.truck.create({
       data: {
@@ -225,6 +240,7 @@ export const POST = withRole(UserRole.OWNER)(async (request) => {
         model,
         year,
         status: TruckStatus.ACTIVE,
+        fuelTankCapacityGallons: tankCapacity ?? undefined,
       },
       include: {
         currentDriver: {
@@ -236,6 +252,33 @@ export const POST = withRole(UserRole.OWNER)(async (request) => {
         },
       },
     })
+
+    // If initial fuel level or location provided, create/update TruckStatusRecord
+    const hasLocation = latitude != null && longitude != null && latitude !== '' && longitude !== ''
+    const lat = hasLocation ? parseFloat(String(latitude)) : 0
+    const lng = hasLocation ? parseFloat(String(longitude)) : 0
+    const validLocation = hasLocation && !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+
+    if (fuelLevel != null && !isNaN(fuelLevel) || validLocation) {
+      await prisma.truckStatusRecord.upsert({
+        where: { truckId: truck.id },
+        create: {
+          truckId: truck.id,
+          latitude: validLocation ? lat : 0,
+          longitude: validLocation ? lng : 0,
+          speed: 0,
+          heading: 0,
+          fuelLevel: fuelLevel ?? null,
+          ignitionOn: false,
+          lastPingAt: new Date(),
+        },
+        update: {
+          ...(validLocation && { latitude: lat, longitude: lng }),
+          ...(fuelLevel != null && !isNaN(fuelLevel) && { fuelLevel }),
+          lastPingAt: new Date(),
+        },
+      })
+    }
 
     return NextResponse.json(truck, { status: 201 })
   } catch (error) {

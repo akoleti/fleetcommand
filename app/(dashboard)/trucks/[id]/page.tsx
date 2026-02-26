@@ -227,6 +227,12 @@ export default function TruckDetailPage() {
   const [insuranceSubmitting, setInsuranceSubmitting] = useState(false)
   const [insuranceError, setInsuranceError] = useState<string | null>(null)
 
+  // Location update
+  const [locationFormOpen, setLocationFormOpen] = useState(false)
+  const [locationForm, setLocationForm] = useState({ latitude: '', longitude: '' })
+  const [locationSubmitting, setLocationSubmitting] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
+
   const authHeaders = () => {
     const token = localStorage.getItem('accessToken')
     return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -786,27 +792,129 @@ export default function TruckDetailPage() {
       )}
 
       {activeTab === 'location' && (
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100">
-            <h3 className="font-semibold text-slate-900">Current Location</h3>
-          </div>
-          {truck.truckStatus ? (
-            <div>
-              <div className="px-6 py-3 text-sm text-slate-500 bg-slate-50/50">
-                Coordinates: {truck.truckStatus.latitude.toFixed(6)}, {truck.truckStatus.longitude.toFixed(6)}
-              </div>
-              <div className="bg-slate-100 h-96 flex items-center justify-center">
-                <div className="text-center">
-                  <svg className="mx-auto h-10 w-10 text-slate-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                  </svg>
-                  <p className="mt-3 text-sm text-slate-500">Map integration coming soon</p>
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <h3 className="font-semibold text-slate-900">Current Location</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setLocationError(null)
+                  setLocationForm({
+                    latitude: truck.truckStatus?.latitude?.toString() ?? '',
+                    longitude: truck.truckStatus?.longitude?.toString() ?? '',
+                  })
+                  setLocationFormOpen(true)
+                }}
+                className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors"
+              >
+                Update location manually
+              </button>
+            </div>
+            {truck.truckStatus ? (
+              <div>
+                <div className="px-6 py-3 text-sm text-slate-500 bg-slate-50/50">
+                  Coordinates: {truck.truckStatus.latitude.toFixed(6)}, {truck.truckStatus.longitude.toFixed(6)}
+                </div>
+                <div className="bg-slate-100 h-64 flex items-center justify-center">
+                  <div className="text-center">
+                    <svg className="mx-auto h-10 w-10 text-slate-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                    </svg>
+                    <p className="mt-3 text-sm text-slate-500">Map integration coming soon</p>
+                  </div>
                 </div>
               </div>
+            ) : (
+              <div className="px-6 py-8 text-center">
+                <p className="text-sm text-slate-500 mb-4">No location data available</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocationForm({ latitude: '', longitude: '' })
+                    setLocationFormOpen(true)
+                  }}
+                  className="text-sm font-medium text-brand-600 hover:text-brand-700"
+                >
+                  Add location manually
+                </button>
+              </div>
+            )}
+          </div>
+
+          {locationFormOpen && (
+            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
+              <h4 className="font-semibold text-slate-900 mb-3">Update Location</h4>
+              {locationError && (
+                <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{locationError}</div>
+              )}
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  const lat = parseFloat(locationForm.latitude)
+                  const lng = parseFloat(locationForm.longitude)
+                  if (isNaN(lat) || isNaN(lng)) {
+                    setLocationError('Enter valid latitude and longitude')
+                    return
+                  }
+                  setLocationSubmitting(true)
+                  setLocationError(null)
+                  try {
+                    const res = await fetch(`/api/trucks/${truckId}/location`, {
+                      method: 'PATCH',
+                      headers: authHeaders(),
+                      body: JSON.stringify({ latitude: lat, longitude: lng }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) throw new Error(data.error || 'Failed to update')
+                    setLocationForm({ latitude: '', longitude: '' })
+                    setLocationFormOpen(false)
+                    await fetchTruck()
+                  } catch (err) {
+                    setLocationError(err instanceof Error ? err.message : 'Failed to update')
+                  } finally {
+                    setLocationSubmitting(false)
+                  }
+                }}
+                className="flex flex-col sm:flex-row gap-4"
+              >
+                <div className="flex-1">
+                  <label className={labelCls}>Latitude</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="e.g. 37.7749"
+                    value={locationForm.latitude}
+                    onChange={(e) => setLocationForm({ ...locationForm, latitude: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className={labelCls}>Longitude</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="e.g. -122.4194"
+                    value={locationForm.longitude}
+                    onChange={(e) => setLocationForm({ ...locationForm, longitude: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+                <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setLocationForm({ latitude: '', longitude: '' }); setLocationFormOpen(false) }}
+                    className={secondaryBtnCls}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={locationSubmitting} className={primaryBtnCls}>
+                    {locationSubmitting ? 'Saving...' : 'Save Location'}
+                  </button>
+                </div>
+              </form>
             </div>
-          ) : (
-            <div className="px-6 py-12 text-center text-sm text-slate-500">No location data available</div>
           )}
         </div>
       )}

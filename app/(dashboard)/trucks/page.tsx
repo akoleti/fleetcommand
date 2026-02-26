@@ -63,7 +63,7 @@ export default function TrucksPage() {
   const [totalPages, setTotalPages] = useState(1)
 
   const [showAddModal, setShowAddModal] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear() })
+  const [addForm, setAddForm] = useState({ name: '', vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear(), fuelTankCapacityGallons: '', initialFuelLevel: '', latitude: '', longitude: '' })
   const [addError, setAddError] = useState<string | null>(null)
   const [addSubmitting, setAddSubmitting] = useState(false)
 
@@ -135,14 +135,21 @@ export default function TrucksPage() {
       const res = await fetch('/api/trucks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...addForm, name: addForm.name.trim() || null }),
+        body: JSON.stringify({
+          ...addForm,
+          name: addForm.name.trim() || null,
+          fuelTankCapacityGallons: addForm.fuelTankCapacityGallons ? parseInt(addForm.fuelTankCapacityGallons, 10) : null,
+          initialFuelLevel: addForm.initialFuelLevel ? parseInt(addForm.initialFuelLevel, 10) : null,
+          latitude: addForm.latitude ? parseFloat(addForm.latitude) : null,
+          longitude: addForm.longitude ? parseFloat(addForm.longitude) : null,
+        }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => null)
         throw new Error(body?.error || `Failed to add truck (${res.status})`)
       }
       setShowAddModal(false)
-      setAddForm({ name: '', vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear() })
+      setAddForm({ name: '', vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear(), fuelTankCapacityGallons: '', initialFuelLevel: '', latitude: '', longitude: '' })
       fetchTrucks()
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'An error occurred')
@@ -501,6 +508,57 @@ export default function TrucksPage() {
                   onChange={(e) => setAddForm({ ...addForm, year: parseInt(e.target.value) || new Date().getFullYear() })}
                   className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Fuel Tank Capacity <span className="text-slate-400 font-normal">(gal, optional)</span></label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={addForm.fuelTankCapacityGallons}
+                    onChange={(e) => setAddForm({ ...addForm, fuelTankCapacityGallons: e.target.value })}
+                    placeholder="e.g. 150"
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Current Fuel Level <span className="text-slate-400 font-normal">(%, optional)</span></label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={addForm.initialFuelLevel}
+                    onChange={(e) => setAddForm({ ...addForm, initialFuelLevel: e.target.value })}
+                    placeholder="e.g. 75"
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Latitude <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={addForm.latitude}
+                    onChange={(e) => setAddForm({ ...addForm, latitude: e.target.value })}
+                    placeholder="e.g. 37.7749"
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Longitude <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={addForm.longitude}
+                    onChange={(e) => setAddForm({ ...addForm, longitude: e.target.value })}
+                    placeholder="e.g. -122.4194"
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                  />
+                </div>
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button

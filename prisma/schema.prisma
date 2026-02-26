@@ -164,18 +164,19 @@ model RefreshToken {
 // ============================================================================
 
 model Truck {
-  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId  String      @db.Uuid
-  name            String?
-  vin             String      @unique
-  licensePlate    String
-  make            String
-  model           String
-  year            Int
-  status          TruckStatus @default(ACTIVE)
-  currentDriverId String?     @db.Uuid
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                    String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String      @db.Uuid
+  name                  String?
+  vin                   String      @unique
+  licensePlate          String
+  make                  String
+  model                 String
+  year                  Int
+  status                TruckStatus @default(ACTIVE)
+  currentDriverId       String?     @db.Uuid
+  fuelTankCapacityGallons Int?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
 
   organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   currentDriver     Driver?            @relation("CurrentDriver", fields: [currentDriverId], references: [id])
