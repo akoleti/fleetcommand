@@ -77,12 +77,18 @@ export default function DashboardPage() {
         fetch('/api/dashboard/truck-metrics', { headers }),
       ])
 
-      const statsData = statsRes.status === 'fulfilled' && statsRes.value.ok
-        ? await statsRes.value.json() : null
-      const activityData = activityRes.status === 'fulfilled' && activityRes.value.ok
-        ? await activityRes.value.json() : null
-      const metricsData = metricsRes.status === 'fulfilled' && metricsRes.value.ok
-        ? await metricsRes.value.json() : null
+      const statsVal = statsRes.status === 'fulfilled' ? statsRes.value : null
+      const activityVal = activityRes.status === 'fulfilled' ? activityRes.value : null
+      const metricsVal = metricsRes.status === 'fulfilled' ? metricsRes.value : null
+      if ([statsVal, activityVal, metricsVal].some((r) => r?.status === 401)) {
+        const { redirectToLogin } = await import('@/lib/api')
+        redirectToLogin()
+        return
+      }
+
+      const statsData = statsVal?.ok ? await statsVal.json() : null
+      const activityData = activityVal?.ok ? await activityVal.json() : null
+      const metricsData = metricsVal?.ok ? await metricsVal.json() : null
 
       if (statsData) {
         setStats({
@@ -293,7 +299,7 @@ export default function DashboardPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Date & Time</th>
+                  <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Date & Time</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Truck</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
@@ -308,7 +314,7 @@ export default function DashboardPage() {
                     const sev = severityConfig[item.severity] || severityConfig.INFO
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/50">
-                        <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{dateStr} {timeStr}</td>
+                        <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{dateStr} {timeStr}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${sev.bg} ${sev.text}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${sev.dot}`} />
@@ -334,7 +340,7 @@ export default function DashboardPage() {
                   if (item.kind === 'delivery') {
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/50">
-                        <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{dateStr} {timeStr}</td>
+                        <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{dateStr} {timeStr}</td>
                         <td className="px-6 py-4">
                           <span className="inline-flex gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium bg-emerald-50 text-emerald-700">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -356,7 +362,7 @@ export default function DashboardPage() {
                   }
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/50">
-                      <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{dateStr} {timeStr}</td>
+                      <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{dateStr} {timeStr}</td>
                       <td className="px-6 py-4">
                         <span className="inline-flex gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-700">
                           <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />

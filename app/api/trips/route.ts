@@ -11,6 +11,7 @@ import { withAuth, withRole } from '@/middleware/auth'
 import { prisma } from '@/lib/db'
 import { getPaginationParams, createPaginatedResult, handlePrismaError } from '@/lib/db'
 import { UserRole, TripStatus, TruckStatus, DriverStatus } from '@prisma/client'
+import { optimizeRoute2Opt } from '@/lib/route-optimizer'
 
 /**
  * GET /api/trips
@@ -131,6 +132,7 @@ export const GET = withAuth(async (request) => {
           createdBy: {
             select: { id: true, name: true },
           },
+          stops: { orderBy: { sequence: 'asc' } },
           deliveryProofs: {
             select: {
               id: true,
@@ -169,30 +171,22 @@ export const GET = withAuth(async (request) => {
  * 
  * Create/schedule new trip (OWNER/MANAGER only)
  * 
- * Body:
- * - truckId: string
- * - driverId: string
- * - originAddress: string
- * - originLat: number
- * - originLng: number
- * - destinationAddress: string
- * - destinationLat: number
- * - destinationLng: number
- * - scheduledStart: ISO date string
- * - scheduledEnd: ISO date string (optional)
- * - notes: string (optional)
+ * Body (legacy single trip):
+ * - truckId, driverId, originAddress, originLat, originLng, destinationAddress, destinationLat, destinationLng, scheduledStart, scheduledEnd?, notes?
+ * 
+ * Body (multi-stop):
+ * - truckId, driverId, stops: [{ type: 'PICKUP'|'DROPOFF', address, lat, lng, notes? }], scheduledStart, scheduledEnd?, notes?
+ * - System optimizes stop order for minimal distance
  * 
  * Validations:
  * - Truck must be ACTIVE and NOT BLOCKED
  * - Driver must be AVAILABLE
- * - Both must belong to user's organization
  */
 export const POST = withRole(UserRole.OWNER, UserRole.MANAGER)(async (request) => {
   try {
     const { user } = request
     const body = await request.json()
 
-    // Validate required fields
     const {
       truckId,
       driverId,
@@ -202,29 +196,74 @@ export const POST = withRole(UserRole.OWNER, UserRole.MANAGER)(async (request) =
       destinationAddress,
       destinationLat,
       destinationLng,
+      stops: stopsInput,
       scheduledStart,
       scheduledEnd,
       notes,
     } = body
 
-    if (!truckId || !driverId || !originAddress || !destinationAddress || !scheduledStart) {
+    if (!truckId || !driverId || !scheduledStart) {
       return NextResponse.json(
-        { 
-          error: 'Missing required fields: truckId, driverId, originAddress, destinationAddress, scheduledStart',
-          code: 'VALIDATION_ERROR'
-        },
+        { error: 'Missing required fields: truckId, driverId, scheduledStart', code: 'VALIDATION_ERROR' },
         { status: 400 }
       )
     }
 
-    if (
-      typeof originLat !== 'number' ||
-      typeof originLng !== 'number' ||
-      typeof destinationLat !== 'number' ||
-      typeof destinationLng !== 'number'
-    ) {
+    let originAddr: string
+    let originLatVal: number | null
+    let originLngVal: number | null
+    let destAddr: string
+    let destLatVal: number | null
+    let destLngVal: number | null
+    let tripStops: Array<{ type: 'PICKUP' | 'DROPOFF'; address: string; lat: number | null; lng: number | null; notes?: string; sequence: number }> = []
+
+    if (Array.isArray(stopsInput) && stopsInput.length >= 1) {
+      // Multi-stop: validate and optimize (lat/lng optional, coerce when provided)
+      const toNum = (v: unknown) => {
+        const n = typeof v === 'number' && !isNaN(v) ? v : parseFloat(String(v ?? ''))
+        return isNaN(n) ? null : n
+      }
+      const validStops = stopsInput
+        .filter((s: any) => s && (s.type === 'PICKUP' || s.type === 'DROPOFF') && typeof s.address === 'string')
+        .map((s: any) => ({ ...s, lat: toNum(s.lat), lng: toNum(s.lng) }))
+      if (validStops.length === 0) {
+        return NextResponse.json(
+          { error: 'stops must be a non-empty array of { type, address }', code: 'VALIDATION_ERROR' },
+          { status: 400 }
+        )
+      }
+      const withCoords = validStops.filter((s: any) => s.lat != null && s.lng != null)
+      const optimized = withCoords.length === validStops.length
+        ? optimizeRoute2Opt(validStops.map((s: any) => ({ type: s.type, address: s.address, lat: s.lat!, lng: s.lng!, notes: s.notes })))
+        : validStops.map((s: any, i) => ({ ...s, sequence: i + 1 }))
+      const first = optimized[0]
+      const last = optimized[optimized.length - 1]
+      originAddr = first.address
+      originLatVal = first.lat ?? null
+      originLngVal = first.lng ?? null
+      destAddr = last.address
+      destLatVal = last.lat ?? null
+      destLngVal = last.lng ?? null
+      tripStops = optimized.map((s: any) => ({ ...s, lat: s.lat ?? null, lng: s.lng ?? null }))
+    } else if (originAddress && destinationAddress) {
+      // Legacy single trip - lat/lng optional, coerce when provided
+      const toNum = (v: unknown) => {
+        const n = typeof v === 'number' && !isNaN(v) ? v : parseFloat(String(v ?? ''))
+        return isNaN(n) ? null : n
+      }
+      const olat = toNum(originLat)
+      const olng = toNum(originLng)
+      const dlat = toNum(destinationLat)
+      const dlng = toNum(destinationLng)
+      originAddr = originAddress
+      originLatVal = olat ?? null
+      originLngVal = olng ?? null
+      destAddr = destinationAddress
+      destLatVal = dlat ?? null
+      destLngVal = dlng ?? null
+    } else {
       return NextResponse.json(
-        { error: 'Coordinates must be numbers', code: 'VALIDATION_ERROR' },
+        { error: 'Provide either (originAddress, originLat, originLng, destinationAddress, destinationLat, destinationLng) or stops array', code: 'VALIDATION_ERROR' },
         { status: 400 }
       )
     }
@@ -247,7 +286,6 @@ export const POST = withRole(UserRole.OWNER, UserRole.MANAGER)(async (request) =
           { status: 400 }
         )
       }
-
       if (endDate <= startDate) {
         return NextResponse.json(
           { error: 'scheduledEnd must be after scheduledStart', code: 'VALIDATION_ERROR' },
@@ -332,51 +370,55 @@ export const POST = withRole(UserRole.OWNER, UserRole.MANAGER)(async (request) =
     }
 
     // Create trip and update driver status in transaction
-    const result = await prisma.$transaction([
-      // Create trip
-      prisma.trip.create({
+    const result = await prisma.$transaction(async (tx) => {
+      const trip = await tx.trip.create({
         data: {
           truckId,
           driverId,
-          originAddress,
-          originLat,
-          originLng,
-          destinationAddress,
-          destinationLat,
-          destinationLng,
+          originAddress: originAddr,
+          originLat: originLatVal,
+          originLng: originLngVal,
+          destinationAddress: destAddr,
+          destinationLat: destLatVal,
+          destinationLng: destLngVal,
           scheduledStart: startDate,
           scheduledEnd: endDate,
           notes,
           status: TripStatus.SCHEDULED,
           createdById: user.userId,
         },
-        include: {
-          truck: {
-            select: {
-              id: true,
-              vin: true,
-              licensePlate: true,
-              make: true,
-              model: true,
-            },
-          },
-          driver: {
-            select: {
-              id: true,
-              name: true,
-              phone: true,
-            },
-          },
-        },
-      }),
-      // Update driver status to ON_TRIP
-      prisma.driver.update({
+      })
+
+      if (tripStops.length > 0) {
+        await tx.tripStop.createMany({
+          data: tripStops.map((s) => ({
+            tripId: trip.id,
+            sequence: s.sequence,
+            type: s.type,
+            address: s.address,
+            lat: s.lat,
+            lng: s.lng,
+            notes: s.notes ?? null,
+          })),
+        })
+      }
+
+      await tx.driver.update({
         where: { id: driverId },
         data: { status: DriverStatus.ON_TRIP },
-      }),
-    ])
+      })
 
-    const trip = result[0]
+      return tx.trip.findUnique({
+        where: { id: trip.id },
+        include: {
+          truck: { select: { id: true, vin: true, licensePlate: true, make: true, model: true } },
+          driver: { select: { id: true, name: true, phone: true } },
+          stops: { orderBy: { sequence: 'asc' } },
+        },
+      })
+    })
+
+    const trip = result!
 
     return NextResponse.json(trip, { status: 201 })
   } catch (error) {

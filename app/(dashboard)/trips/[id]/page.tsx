@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { handleAuthResponse } from '@/lib/api'
 
 interface MediaItem {
   id: string
@@ -23,6 +24,16 @@ interface DeliveryProof {
   media: MediaItem[]
 }
 
+interface TripStop {
+  id: string
+  sequence: number
+  type: string
+  address: string
+  lat: number
+  lng: number
+  notes: string | null
+}
+
 interface Trip {
   id: string
   status: string
@@ -37,6 +48,7 @@ interface Trip {
   actualStart: string | null
   actualEnd: string | null
   notes: string | null
+  stops?: TripStop[]
   truck: {
     id: string
     make: string
@@ -91,6 +103,7 @@ export default function TripDetailPage() {
       const res = await fetch(`/api/trips/${tripId}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) throw new Error('Failed to fetch trip')
       const data: Trip = await res.json()
 
@@ -101,6 +114,7 @@ export default function TripDetailPage() {
               const mediaRes = await fetch(`/api/delivery-proof/${proof.id}`, {
                 headers: { Authorization: `Bearer ${token}` },
               })
+              if (!handleAuthResponse(mediaRes)) return proof
               if (mediaRes.ok) {
                 const full = await mediaRes.json()
                 return { ...proof, media: full.media || [] }
@@ -141,6 +155,7 @@ export default function TripDetailPage() {
         }),
       })
 
+      if (!handleAuthResponse(res)) return
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to create proof')
@@ -225,18 +240,40 @@ export default function TripDetailPage() {
                 {trip.status.replace('_', ' ')}
               </span>
             </div>
-            <div className="mt-1.5 flex items-center gap-2 text-sm text-slate-500">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="max-w-[200px] truncate">{trip.originAddress}</span>
-              </div>
-              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-              </svg>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-red-500" />
-                <span className="max-w-[200px] truncate">{trip.destinationAddress}</span>
-              </div>
+            <div className="mt-1.5 flex items-center gap-2 text-sm text-slate-500 flex-wrap">
+              {trip.stops && trip.stops.length > 0 ? (
+                <>
+                  {trip.stops.map((stop, i) => (
+                    <React.Fragment key={stop.id}>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${stop.type === 'PICKUP' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        <span className="max-w-[160px] truncate" title={stop.address}>
+                          {stop.sequence}. {stop.address}
+                        </span>
+                      </div>
+                      {i < trip.stops!.length - 1 && (
+                        <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                        </svg>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="max-w-[200px] truncate">{trip.originAddress}</span>
+                  </div>
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    <span className="max-w-[200px] truncate">{trip.destinationAddress}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -288,6 +325,27 @@ export default function TripDetailPage() {
             )}
           </dl>
         </div>
+
+        {trip.stops && trip.stops.length > 0 && (
+          <div className="rounded-2xl bg-white border border-slate-200 shadow-sm lg:col-span-2">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h3 className="font-semibold text-slate-900">Route Stops (optimized order)</h3>
+            </div>
+            <ul className="px-6 py-4 divide-y divide-slate-100">
+              {trip.stops.map((stop) => (
+                <li key={stop.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${stop.type === 'PICKUP' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                    {stop.sequence}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${stop.type === 'PICKUP' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                    {stop.type}
+                  </span>
+                  <span className="text-sm text-slate-900">{stop.address}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Truck & Driver */}
         <div className="space-y-6">

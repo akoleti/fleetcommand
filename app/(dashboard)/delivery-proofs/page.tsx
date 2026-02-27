@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { handleAuthResponse } from '@/lib/api'
 
 interface MediaSummary {
   id: string
@@ -102,6 +103,7 @@ export default function DeliveryProofsPage() {
       const res = await fetch(`/api/delivery-proof?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) throw new Error('Failed to fetch delivery proofs')
 
       const data: PaginatedResponse = await res.json()
@@ -143,6 +145,7 @@ export default function DeliveryProofsPage() {
       const res = await fetch(`/api/delivery-proof/${proofId}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) throw new Error('Failed to load proof details')
       const data: ProofDetail = await res.json()
       setExpandedProof(data)

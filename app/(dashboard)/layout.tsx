@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { redirectToLogin } from '@/lib/api'
 
 const navItems = [
   {
@@ -107,13 +108,17 @@ export default function DashboardLayout({
     const token = localStorage.getItem('accessToken')
     const headers = { Authorization: `Bearer ${token}` }
     Promise.all([
-      fetch('/api/auth/me', { headers }).then((r) => r.ok ? r.json() : null),
-      fetch('/api/dashboard/stats', { headers }).then((r) => r.ok ? r.json() : null),
-    ]).then(([userData, statsData]) => {
-      if (userData) setUser({ name: userData.name, email: userData.email })
-      if (statsData?.alerts?.unacknowledged != null) setAlertCount(statsData.alerts.unacknowledged)
+      fetch('/api/auth/me', { headers }),
+      fetch('/api/dashboard/stats', { headers }),
+    ]).then(([meRes, statsRes]) => {
+      if (meRes.status === 401 || statsRes.status === 401) {
+        redirectToLogin()
+        return
+      }
+      if (meRes.ok) meRes.json().then((userData) => setUser({ name: userData.name, email: userData.email }))
+      if (statsRes.ok) statsRes.json().then((statsData) => setAlertCount(statsData?.alerts?.unacknowledged ?? 0))
     })
-  }, [authChecked])
+  }, [authChecked, router])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

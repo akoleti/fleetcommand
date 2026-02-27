@@ -61,6 +61,7 @@ const getHeaders = () => {
 }
 
 import { gallonsToLiters, GALLONS_TO_LITERS } from '@/lib/format'
+import { handleAuthResponse } from '@/lib/api'
 
 const formatCurrency = (amount: number) =>
   `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
@@ -104,6 +105,7 @@ export default function FuelPage() {
     try {
       setStationsLoading(true)
       const res = await fetch('/api/fuel-stations', { headers: getHeaders() })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) throw new Error('Failed to fetch fuel stations')
       const data = await res.json()
       setFuelStations(data)
@@ -127,6 +129,7 @@ export default function FuelPage() {
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: trimmed }),
       })
+      if (!handleAuthResponse(res)) return
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to add station')
       setNewStation('')
@@ -142,6 +145,7 @@ export default function FuelPage() {
     try {
       setDeletingStationId(id)
       const res = await fetch(`/api/fuel-stations/${id}`, { method: 'DELETE', headers: getHeaders() })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to remove')
@@ -166,6 +170,7 @@ export default function FuelPage() {
     try {
       setTrucksLoading(true)
       const res = await fetch('/api/trucks?limit=100', { headers: getHeaders() })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) throw new Error('Failed to fetch trucks')
       const data: PaginatedResponse<Truck> = await res.json()
       setTrucks(data.data)
@@ -180,6 +185,7 @@ export default function FuelPage() {
     try {
       setStatsLoading(true)
       const res = await fetch('/api/fuel/stats', { headers: getHeaders() })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) throw new Error('Failed to fetch fuel stats')
       setStats(await res.json())
     } catch {
@@ -196,11 +202,8 @@ export default function FuelPage() {
       setLoading(true)
       setError(null)
       const res = await fetch(`/api/fuel?limit=100`, { headers: getHeaders() })
+      if (!handleAuthResponse(res)) return
       const data = await res.json().catch(() => ({}))
-      if (res.status === 401) {
-        router.replace('/login')
-        return
-      }
       if (!res.ok) throw new Error(data.error || `Failed to fetch fuel logs (${res.status})`)
       setAllLogs((data.data ?? data) || [])
       setLogs([])
@@ -219,11 +222,8 @@ export default function FuelPage() {
       setError(null)
       const params = new URLSearchParams({ truckId: selectedTruckId, page: page.toString(), limit: '50' })
       const res = await fetch(`/api/fuel?${params}`, { headers: getHeaders() })
+      if (!handleAuthResponse(res)) return
       const data = await res.json().catch(() => ({}))
-      if (res.status === 401) {
-        router.replace('/login')
-        return
-      }
       if (!res.ok) throw new Error(data.error || `Failed to fetch fuel logs (${res.status})`)
       setLogs((data.data ?? data) || [])
       setTotalPages(data.pagination?.totalPages ?? 1)

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { litersToGallons } from '@/lib/format'
+import { handleAuthResponse } from '@/lib/api'
 
 interface Truck {
   id: string
@@ -111,6 +112,7 @@ export default function TrucksPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
 
+      if (!handleAuthResponse(response)) return
       if (!response.ok) throw new Error('Failed to fetch trucks')
 
       const data: PaginatedResponse = await response.json()
@@ -165,6 +167,7 @@ export default function TrucksPage() {
           longitude: addForm.longitude ? parseFloat(addForm.longitude) : null,
         }),
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) {
         const body = await res.json().catch(() => null)
         throw new Error(body?.error || `Failed to add truck (${res.status})`)
@@ -188,6 +191,7 @@ export default function TrucksPage() {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) {
         const body = await res.json().catch(() => null)
         throw new Error(body?.error || `Failed to delete truck (${res.status})`)

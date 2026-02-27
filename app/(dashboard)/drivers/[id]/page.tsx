@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { handleAuthResponse } from '@/lib/api'
 
 interface Driver {
   id: string
@@ -85,6 +86,7 @@ export default function DriverDetailPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
 
+      if (!handleAuthResponse(response)) return
       if (!response.ok) throw new Error('Failed to fetch driver')
 
       const data: Driver = await response.json()
@@ -106,6 +108,7 @@ export default function DriverDetailPage() {
       const res = await fetch('/api/trucks?limit=100&status=all', {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!handleAuthResponse(res)) return
       if (res.ok) {
         const data = await res.json()
         setTrucks((data.data || []).filter((t: TruckOption) => t.status === 'ACTIVE'))
@@ -124,6 +127,7 @@ export default function DriverDetailPage() {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ driverId }),
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) {
         const data = await res.json()
         setAssignError(data.error || 'Failed to assign truck')
@@ -141,11 +145,12 @@ export default function DriverDetailPage() {
   const handleUnassign = async (truckId: string) => {
     try {
       const token = localStorage.getItem('accessToken')
-      await fetch(`/api/trucks/${truckId}/assign`, {
+      const res = await fetch(`/api/trucks/${truckId}/assign`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ driverId: null }),
       })
+      if (!handleAuthResponse(res)) return
       fetchDriver()
     } catch {}
   }

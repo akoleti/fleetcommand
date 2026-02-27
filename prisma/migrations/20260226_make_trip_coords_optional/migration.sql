@@ -1,0 +1,9 @@
+-- AlterTable
+ALTER TABLE "trips" ALTER COLUMN "originLat" DROP NOT NULL;
+ALTER TABLE "trips" ALTER COLUMN "originLng" DROP NOT NULL;
+ALTER TABLE "trips" ALTER COLUMN "destinationLat" DROP NOT NULL;
+ALTER TABLE "trips" ALTER COLUMN "destinationLng" DROP NOT NULL;
+
+-- AlterTable
+ALTER TABLE "trip_stops" ALTER COLUMN "lat" DROP NOT NULL;
+ALTER TABLE "trip_stops" ALTER COLUMN "lng" DROP NOT NULL;

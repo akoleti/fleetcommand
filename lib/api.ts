@@ -3,6 +3,22 @@
  * Handles 401 by clearing token and redirecting to login
  */
 
+export function redirectToLogin(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('accessToken')
+    window.location.href = '/login'
+  }
+}
+
+/** Call after fetch - redirects to login if 401. Returns false if redirected. */
+export function handleAuthResponse(res: Response): boolean {
+  if (res.status === 401) {
+    redirectToLogin()
+    return false
+  }
+  return true
+}
+
 export async function fetchWithAuth(
   url: string,
   options: RequestInit = {}
@@ -15,9 +31,7 @@ export async function fetchWithAuth(
 
   const res = await fetch(url, { ...options, headers })
 
-  if (res.status === 401 && typeof window !== 'undefined') {
-    localStorage.removeItem('accessToken')
-    window.location.href = '/login'
+  if (!handleAuthResponse(res)) {
     throw new Error('Session expired. Please log in again.')
   }
 

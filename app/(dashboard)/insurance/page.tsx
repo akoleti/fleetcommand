@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { handleAuthResponse } from '@/lib/api'
 
 interface InsurancePolicy {
   id: string
@@ -93,6 +94,7 @@ export default function InsurancePage() {
       setLoading(true)
       const params = new URLSearchParams({ page: page.toString(), limit: '20' })
       const response = await fetch(`/api/insurance?${params}`, { headers: getHeaders() })
+      if (!handleAuthResponse(response)) return
       if (!response.ok) throw new Error('Failed to fetch policies')
       const data: PaginatedResponse<InsurancePolicy> = await response.json()
       setPolicies(data.data)
@@ -110,6 +112,7 @@ export default function InsurancePage() {
       setLoading(true)
       const params = new URLSearchParams({ page: page.toString(), limit: '20' })
       const response = await fetch(`/api/insurance?${params}&includeClaims=true`, { headers: getHeaders() })
+      if (!handleAuthResponse(response)) return
       if (!response.ok) throw new Error('Failed to fetch claims')
 
       const data = await response.json()
@@ -119,6 +122,7 @@ export default function InsurancePage() {
       for (const policy of allPolicies) {
         try {
           const claimsRes = await fetch(`/api/insurance/${policy.id}/claims`, { headers: getHeaders() })
+          if (!handleAuthResponse(claimsRes)) return
           if (claimsRes.ok) {
             const claimsData = await claimsRes.json()
             const policyClaims = (claimsData.data || claimsData || []).map((c: any) => ({
@@ -147,6 +151,7 @@ export default function InsurancePage() {
       setLoading(true)
       const params = new URLSearchParams({ expiringSoon: 'true', page: page.toString(), limit: '20' })
       const response = await fetch(`/api/insurance?${params}`, { headers: getHeaders() })
+      if (!handleAuthResponse(response)) return
       if (!response.ok) throw new Error('Failed to fetch expiring policies')
       const data: PaginatedResponse<InsurancePolicy> = await response.json()
       setExpiringPolicies(data.data)
@@ -176,6 +181,7 @@ export default function InsurancePage() {
     setModalError(null)
     try {
       const res = await fetch('/api/trucks?limit=100', { headers: getHeaders() })
+      if (!handleAuthResponse(res)) return
       if (res.ok) {
         const data = await res.json()
         setTrucks(data.data || [])
@@ -204,6 +210,7 @@ export default function InsurancePage() {
           notes: modalForm.notes || null,
         }),
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) {
         const data = await res.json()
         setModalError(data.error || 'Failed to add policy')

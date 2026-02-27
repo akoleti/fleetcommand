@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { handleAuthResponse } from '@/lib/api'
 
 interface User {
   id: string
@@ -58,13 +59,8 @@ export default function SettingsPage() {
   const fetchUser = async () => {
     try {
       const res = await fetch('/api/auth/me', { headers: getHeaders() })
-      if (!res.ok) {
-        if (res.status === 401) {
-          router.replace('/login')
-          return
-        }
-        throw new Error('Failed to fetch user')
-      }
+      if (!handleAuthResponse(res)) return
+      if (!res.ok) throw new Error('Failed to fetch user')
       const data = await res.json()
       setUser(data)
     } catch {
@@ -85,6 +81,7 @@ export default function SettingsPage() {
         headers: { ...getHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(profileForm),
       })
+      if (!handleAuthResponse(res)) return
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to update profile')
       setUser(data)
@@ -120,6 +117,7 @@ export default function SettingsPage() {
           confirmPassword: passwordForm.confirmPassword,
         }),
       })
+      if (!handleAuthResponse(res)) return
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to change password')
       setPasswordSuccess(true)

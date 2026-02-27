@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { handleAuthResponse } from '@/lib/api'
 
 interface TruckOption {
   id: string
@@ -77,6 +78,7 @@ export default function ReportsPage() {
       const res = await fetch(`/api/trucks?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!handleAuthResponse(res)) return
       if (res.ok) {
         const data = await res.json()
         const trucks: TruckOption[] = (data.data ?? data).map((t: TruckOption) => ({
@@ -142,6 +144,7 @@ export default function ReportsPage() {
         }),
       })
 
+      if (!handleAuthResponse(response)) return
       if (!response.ok) {
         const data = await response.json()
         throw new Error(data.error || 'Failed to generate report')

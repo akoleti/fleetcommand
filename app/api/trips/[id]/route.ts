@@ -58,6 +58,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
             status: true,
           },
         },
+        stops: { orderBy: { sequence: 'asc' } },
         deliveryProofs: {
           include: {
             media: {

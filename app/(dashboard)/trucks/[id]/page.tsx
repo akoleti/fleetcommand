@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { gallonsToLiters, litersToGallons, GALLONS_TO_LITERS } from '@/lib/format'
+import { handleAuthResponse } from '@/lib/api'
 
 interface Truck {
   id: string
@@ -252,7 +253,7 @@ export default function TruckDetailPage() {
       fetchedTabs.current.add('trips')
       setTripsLoading(true)
       fetch(`/api/trips?truckId=${truckId}&limit=20`, { headers })
-        .then((r) => r.ok ? r.json() : Promise.reject())
+        .then((r) => { if (!handleAuthResponse(r)) return Promise.reject(); return r.ok ? r.json() : Promise.reject() })
         .then((d) => setTrips(d.data ?? d))
         .catch(() => {})
         .finally(() => setTripsLoading(false))
@@ -262,7 +263,7 @@ export default function TruckDetailPage() {
       fetchedTabs.current.add('maintenance')
       setMaintenanceLoading(true)
       fetch(`/api/maintenance?truckId=${truckId}&limit=20`, { headers })
-        .then((r) => r.ok ? r.json() : Promise.reject())
+        .then((r) => { if (!handleAuthResponse(r)) return Promise.reject(); return r.ok ? r.json() : Promise.reject() })
         .then((d) => setMaintenance(d.data ?? d))
         .catch(() => {})
         .finally(() => setMaintenanceLoading(false))
@@ -272,8 +273,8 @@ export default function TruckDetailPage() {
       fetchedTabs.current.add('fuel')
       setFuelLoading(true)
       Promise.all([
-        fetch(`/api/fuel?truckId=${truckId}&limit=20`, { headers }).then((r) => r.ok ? r.json() : Promise.reject()).then((d) => d.data ?? d),
-        fetch('/api/fuel-stations', { headers }).then((r) => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/fuel?truckId=${truckId}&limit=20`, { headers }).then((r) => { if (!handleAuthResponse(r)) return Promise.reject(); return r.ok ? r.json() : Promise.reject() }).then((d) => d.data ?? d),
+        fetch('/api/fuel-stations', { headers }).then((r) => { if (!handleAuthResponse(r)) return Promise.reject(); return r.ok ? r.json() : [] }).catch(() => []),
       ]).then(([logs, stations]: [FuelRecord[], { name: string }[]]) => {
         setFuelLogs(logs)
         setOrgFuelStations(stations.map((s) => s.name))
@@ -284,7 +285,7 @@ export default function TruckDetailPage() {
       fetchedTabs.current.add('insurance')
       setInsuranceLoading(true)
       fetch(`/api/insurance?truckId=${truckId}&limit=10`, { headers })
-        .then((r) => r.ok ? r.json() : Promise.reject())
+        .then((r) => { if (!handleAuthResponse(r)) return Promise.reject(); return r.ok ? r.json() : Promise.reject() })
         .then((d) => setInsurance(d.data ?? d))
         .catch(() => {})
         .finally(() => setInsuranceLoading(false))
@@ -302,6 +303,7 @@ export default function TruckDetailPage() {
         fetch(`/api/alerts?truckId=${truckId}&limit=10&acknowledged=false`, { headers }),
       ])
 
+      if (!handleAuthResponse(truckRes) || !handleAuthResponse(alertsRes)) return
       if (!truckRes.ok) throw new Error('Failed to fetch truck')
 
       const data: Truck = await truckRes.json()
@@ -325,6 +327,7 @@ export default function TruckDetailPage() {
     setTripsLoading(true)
     try {
       const r = await fetch(`/api/trips?truckId=${truckId}&limit=20`, { headers })
+      if (!handleAuthResponse(r)) return
       if (r.ok) { const d = await r.json(); setTrips(d.data ?? d) }
     } catch {} finally { setTripsLoading(false) }
   }
@@ -335,6 +338,7 @@ export default function TruckDetailPage() {
     setMaintenanceLoading(true)
     try {
       const r = await fetch(`/api/maintenance?truckId=${truckId}&limit=20`, { headers })
+      if (!handleAuthResponse(r)) return
       if (r.ok) { const d = await r.json(); setMaintenance(d.data ?? d) }
     } catch {} finally { setMaintenanceLoading(false) }
   }
@@ -345,6 +349,7 @@ export default function TruckDetailPage() {
     setFuelLoading(true)
     try {
       const r = await fetch(`/api/fuel?truckId=${truckId}&limit=20`, { headers })
+      if (!handleAuthResponse(r)) return
       if (r.ok) { const d = await r.json(); setFuelLogs(d.data ?? d) }
     } catch {} finally { setFuelLoading(false) }
   }
@@ -355,6 +360,7 @@ export default function TruckDetailPage() {
     setInsuranceLoading(true)
     try {
       const r = await fetch(`/api/insurance?truckId=${truckId}&limit=10`, { headers })
+      if (!handleAuthResponse(r)) return
       if (r.ok) { const d = await r.json(); setInsurance(d.data ?? d) }
     } catch {} finally { setInsuranceLoading(false) }
   }
@@ -363,6 +369,7 @@ export default function TruckDetailPage() {
     try {
       const token = localStorage.getItem('accessToken')
       const r = await fetch('/api/drivers?status=available&limit=100', { headers: { Authorization: `Bearer ${token}` } })
+      if (!handleAuthResponse(r)) return
       if (r.ok) { const d = await r.json(); setAvailableDrivers(d.data ?? d) }
     } catch {}
   }
@@ -384,6 +391,7 @@ export default function TruckDetailPage() {
         headers: authHeaders(),
         body: JSON.stringify({ driverId: selectedDriverId }),
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) { const d = await res.json(); setDriverError(d.error || 'Failed to assign driver'); return }
       setDriverModalOpen(false)
       await fetchTruck()
@@ -399,6 +407,7 @@ export default function TruckDetailPage() {
         headers: authHeaders(),
         body: JSON.stringify({ driverId: null }),
       })
+      if (!handleAuthResponse(res)) return
       if (res.ok) await fetchTruck()
     } catch {}
     finally { setDriverAssigning(false) }
@@ -423,16 +432,17 @@ export default function TruckDetailPage() {
           truckId,
           driverId: tripForm.driverId || null,
           originAddress: tripForm.originAddress,
-          originLat: parseFloat(tripForm.originLat),
-          originLng: parseFloat(tripForm.originLng),
+          originLat: (() => { const n = parseFloat(tripForm.originLat); return !isNaN(n) ? n : null })(),
+          originLng: (() => { const n = parseFloat(tripForm.originLng); return !isNaN(n) ? n : null })(),
           destinationAddress: tripForm.destinationAddress,
-          destinationLat: parseFloat(tripForm.destinationLat),
-          destinationLng: parseFloat(tripForm.destinationLng),
+          destinationLat: (() => { const n = parseFloat(tripForm.destinationLat); return !isNaN(n) ? n : null })(),
+          destinationLng: (() => { const n = parseFloat(tripForm.destinationLng); return !isNaN(n) ? n : null })(),
           scheduledStart: new Date(tripForm.scheduledStart).toISOString(),
           scheduledEnd: tripForm.scheduledEnd ? new Date(tripForm.scheduledEnd).toISOString() : null,
           notes: tripForm.notes || null,
         }),
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) { const d = await res.json(); setTripError(d.error || 'Failed to schedule trip'); return }
       setTripModalOpen(false)
       await refetchTrips()
@@ -463,6 +473,7 @@ export default function TruckDetailPage() {
           notes: maintForm.notes || null,
         }),
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) { const d = await res.json(); setMaintError(d.error || 'Failed to schedule maintenance'); return }
       setMaintModalOpen(false)
       await refetchMaintenance()
@@ -475,7 +486,7 @@ export default function TruckDetailPage() {
     setFuelForm({ liters: '', pricePerLiter: '', odometer: '', station: '' })
     setFuelModalOpen(true)
     fetch('/api/fuel-stations', { headers: authHeaders() })
-      .then((r) => r.ok ? r.json() : [])
+      .then((r) => { if (!handleAuthResponse(r)) return Promise.reject(); return r.ok ? r.json() : [] })
       .then((stations: { name: string }[]) => setOrgFuelStations(stations.map((s) => s.name)))
       .catch(() => {})
   }
@@ -496,6 +507,7 @@ export default function TruckDetailPage() {
           station: fuelForm.station || null,
         }),
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) { const d = await res.json(); setFuelModalError(d.error || 'Failed to log fuel'); return }
       setFuelModalOpen(false)
       await refetchFuel()
@@ -535,6 +547,7 @@ export default function TruckDetailPage() {
           notes: insuranceForm.notes || null,
         }),
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) { const d = await res.json(); setInsuranceError(d.error || 'Failed to add policy'); return }
       setInsuranceModalOpen(false)
       await refetchInsurance()
@@ -867,6 +880,7 @@ export default function TruckDetailPage() {
                       headers: authHeaders(),
                       body: JSON.stringify({ latitude: lat, longitude: lng }),
                     })
+                    if (!handleAuthResponse(res)) return
                     const data = await res.json()
                     if (!res.ok) throw new Error(data.error || 'Failed to update')
                     setLocationForm({ latitude: '', longitude: '' })
@@ -1277,12 +1291,12 @@ export default function TruckDetailPage() {
                   <input required value={tripForm.originAddress} onChange={(e) => setTripForm({ ...tripForm, originAddress: e.target.value })} placeholder="123 Main St" className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Origin Lat</label>
-                  <input type="number" step="any" required value={tripForm.originLat} onChange={(e) => setTripForm({ ...tripForm, originLat: e.target.value })} placeholder="40.7128" className={inputCls} />
+                  <label className={labelCls}>Origin Lat <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input type="number" step="any" value={tripForm.originLat} onChange={(e) => setTripForm({ ...tripForm, originLat: e.target.value })} placeholder="18.4386" className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Origin Lng</label>
-                  <input type="number" step="any" required value={tripForm.originLng} onChange={(e) => setTripForm({ ...tripForm, originLng: e.target.value })} placeholder="-74.0060" className={inputCls} />
+                  <label className={labelCls}>Origin Lng <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input type="number" step="any" value={tripForm.originLng} onChange={(e) => setTripForm({ ...tripForm, originLng: e.target.value })} placeholder="79.1288" className={inputCls} />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
@@ -1291,12 +1305,12 @@ export default function TruckDetailPage() {
                   <input required value={tripForm.destinationAddress} onChange={(e) => setTripForm({ ...tripForm, destinationAddress: e.target.value })} placeholder="456 Oak Ave" className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Dest Lat</label>
-                  <input type="number" step="any" required value={tripForm.destinationLat} onChange={(e) => setTripForm({ ...tripForm, destinationLat: e.target.value })} placeholder="34.0522" className={inputCls} />
+                  <label className={labelCls}>Dest Lat <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input type="number" step="any" value={tripForm.destinationLat} onChange={(e) => setTripForm({ ...tripForm, destinationLat: e.target.value })} placeholder="17.9689" className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Dest Lng</label>
-                  <input type="number" step="any" required value={tripForm.destinationLng} onChange={(e) => setTripForm({ ...tripForm, destinationLng: e.target.value })} placeholder="-118.2437" className={inputCls} />
+                  <label className={labelCls}>Dest Lng <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input type="number" step="any" value={tripForm.destinationLng} onChange={(e) => setTripForm({ ...tripForm, destinationLng: e.target.value })} placeholder="79.5941" className={inputCls} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

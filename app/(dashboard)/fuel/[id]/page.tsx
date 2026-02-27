@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { gallonsToLiters, GALLONS_TO_LITERS } from '@/lib/format'
+import { handleAuthResponse } from '@/lib/api'
 
 interface FuelLog {
   id: string
@@ -70,6 +71,7 @@ export default function FuelLogDetailPage() {
     try {
       setLoading(true)
       const res = await fetch(`/api/fuel/log/${id}`, { headers: getHeaders() })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to fetch fuel log')

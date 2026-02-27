@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { handleAuthResponse } from '@/lib/api'
 
 interface Driver {
   id: string
@@ -78,6 +79,7 @@ export default function DriversPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
 
+      if (!handleAuthResponse(response)) return
       if (!response.ok) throw new Error('Failed to fetch drivers')
 
       const data: PaginatedResponse = await response.json()
@@ -107,6 +109,7 @@ export default function DriversPage() {
         body: JSON.stringify(addForm),
       })
 
+      if (!handleAuthResponse(res)) return
       if (!res.ok) {
         const body = await res.json().catch(() => null)
         if (body?.code === 'EMAIL_EXISTS') {

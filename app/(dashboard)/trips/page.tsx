@@ -2,6 +2,16 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { handleAuthResponse } from '@/lib/api'
+
+interface TripStop {
+  type: 'PICKUP' | 'DROPOFF'
+  address: string
+  lat: number
+  lng: number
+  notes?: string
+  sequence?: number
+}
 
 interface Trip {
   id: string
@@ -14,6 +24,7 @@ interface Trip {
   actualEnd: string | null
   truck: { id: string; make: string; model: string; licensePlate: string }
   driver: { id: string; name: string }
+  stops?: TripStop[]
 }
 
 interface PaginatedResponse {
@@ -47,6 +58,14 @@ interface ScheduleForm {
   notes: string
 }
 
+interface StopForm {
+  type: 'PICKUP' | 'DROPOFF'
+  address: string
+  lat: string
+  lng: string
+  notes: string
+}
+
 const emptyForm: ScheduleForm = {
   truckId: '',
   driverId: '',
@@ -60,6 +79,8 @@ const emptyForm: ScheduleForm = {
   scheduledEnd: '',
   notes: '',
 }
+
+const emptyStop: StopForm = { type: 'PICKUP', address: '', lat: '', lng: '', notes: '' }
 
 const errorMessages: Record<string, string> = {
   TRUCK_NOT_AVAILABLE: 'The selected truck is not available for this time period.',
@@ -84,6 +105,9 @@ export default function TripsPage() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState<ScheduleForm>(emptyForm)
+  const [useMultiStop, setUseMultiStop] = useState(false)
+  const [stops, setStops] = useState<StopForm[]>([])
+  const [optimizing, setOptimizing] = useState(false)
   const [trucks, setTrucks] = useState<TruckOption[]>([])
   const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [modalLoading, setModalLoading] = useState(false)
@@ -109,6 +133,7 @@ export default function TripsPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
 
+      if (!handleAuthResponse(response)) return
       if (!response.ok) throw new Error('Failed to fetch trips')
 
       const data: PaginatedResponse = await response.json()
@@ -125,6 +150,8 @@ export default function TripsPage() {
   const openModal = useCallback(async () => {
     setModalOpen(true)
     setForm(emptyForm)
+    setStops([])
+    setUseMultiStop(false)
     setModalError(null)
     setModalLoading(true)
     const token = localStorage.getItem('accessToken')
@@ -134,6 +161,7 @@ export default function TripsPage() {
         fetch('/api/trucks?limit=100', { headers }),
         fetch('/api/drivers?status=available&limit=100', { headers }),
       ])
+      if (!handleAuthResponse(trucksRes) || !handleAuthResponse(driversRes)) return
       if (!trucksRes.ok || !driversRes.ok) throw new Error('Failed to load form data')
       const trucksData = await trucksRes.json()
       const driversData = await driversRes.json()
@@ -146,22 +174,118 @@ export default function TripsPage() {
     }
   }, [])
 
+  const addStop = (type: 'PICKUP' | 'DROPOFF') =>
+    setStops((s) => [...s, { ...emptyStop, type }])
+
+  const removeStop = (idx: number) =>
+    setStops((s) => s.filter((_, i) => i !== idx))
+
+  const updateStop = (idx: number, field: keyof StopForm, value: string) =>
+    setStops((s) => s.map((x, i) => (i === idx ? { ...x, [field]: value } : x)))
+
+  const handleOptimize = async () => {
+    const valid = stops.filter((s) => s.address)
+    if (valid.length < 2) {
+      setModalError('Add at least 2 stops with address and coordinates to optimize.')
+      return
+    }
+    setOptimizing(true)
+    setModalError(null)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch('/api/trips/optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          stops: valid.map((s) => {
+            const lat = parseFloat(s.lat)
+            const lng = parseFloat(s.lng)
+            return {
+              type: s.type,
+              address: s.address,
+              lat: !isNaN(lat) ? lat : undefined,
+              lng: !isNaN(lng) ? lng : undefined,
+              notes: s.notes || undefined,
+            }
+          }),
+        }),
+      })
+      if (!handleAuthResponse(res)) return
+      if (!res.ok) throw new Error('Failed to optimize route')
+      const { stops: optimized } = await res.json()
+      setStops(
+        optimized.map((o: { type: string; address: string; lat: number; lng: number; notes?: string }) => ({
+          type: o.type as 'PICKUP' | 'DROPOFF',
+          address: o.address,
+          lat: String(o.lat),
+          lng: String(o.lng),
+          notes: o.notes || '',
+        }))
+      )
+    } catch {
+      setModalError('Failed to optimize route. Check that all stops have valid coordinates.')
+    } finally {
+      setOptimizing(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
     setModalError(null)
     try {
       const token = localStorage.getItem('accessToken')
-      const body: Record<string, unknown> = {
-        truckId: form.truckId,
-        driverId: form.driverId,
-        originAddress: form.originAddress,
-        originLat: parseFloat(form.originLat),
-        originLng: parseFloat(form.originLng),
-        destinationAddress: form.destinationAddress,
-        destinationLat: parseFloat(form.destinationLat),
-        destinationLng: parseFloat(form.destinationLng),
-        scheduledStart: new Date(form.scheduledStart).toISOString(),
+      let body: Record<string, unknown>
+
+      if (useMultiStop && stops.length >= 2) {
+        const validStops = stops.filter((s) => s.address)
+        if (validStops.length < 2) {
+          setModalError('Add at least 2 stops with address and coordinates.')
+          setSubmitting(false)
+          return
+        }
+        body = {
+          truckId: form.truckId,
+          driverId: form.driverId,
+          stops: validStops.map((s) => {
+            const lat = parseFloat(s.lat)
+            const lng = parseFloat(s.lng)
+            return {
+              type: s.type,
+              address: s.address,
+              lat: !isNaN(lat) ? lat : undefined,
+              lng: !isNaN(lng) ? lng : undefined,
+              notes: s.notes || undefined,
+            }
+          }),
+          scheduledStart: new Date(form.scheduledStart).toISOString(),
+        }
+      } else {
+        let originAddr = form.originAddress
+        let originLat = form.originLat
+        let originLng = form.originLng
+        let destAddr = form.destinationAddress
+        let destLat = form.destinationLat
+        let destLng = form.destinationLng
+        if (useMultiStop && stops.length === 1) {
+          originAddr = stops[0].address
+          originLat = stops[0].lat
+          originLng = stops[0].lng
+          destAddr = stops[0].address
+          destLat = stops[0].lat
+          destLng = stops[0].lng
+        }
+        body = {
+          truckId: form.truckId,
+          driverId: form.driverId,
+          originAddress: originAddr,
+          originLat: parseFloat(originLat),
+          originLng: parseFloat(originLng),
+          destinationAddress: destAddr,
+          destinationLat: parseFloat(destLat),
+          destinationLng: parseFloat(destLng),
+          scheduledStart: new Date(form.scheduledStart).toISOString(),
+        }
       }
       if (form.scheduledEnd) body.scheduledEnd = new Date(form.scheduledEnd).toISOString()
       if (form.notes) body.notes = form.notes
@@ -174,10 +298,11 @@ export default function TripsPage() {
         },
         body: JSON.stringify(body),
       })
+      if (!handleAuthResponse(res)) return
       if (!res.ok) {
         const err = await res.json().catch(() => null)
         const code = err?.code || err?.error?.code || ''
-        throw new Error(errorMessages[code] || err?.message || err?.error?.message || 'Failed to schedule trip')
+        throw new Error(errorMessages[code] || err?.error || err?.message || 'Failed to schedule trip')
       }
       setModalOpen(false)
       fetchTrips()
@@ -301,7 +426,11 @@ export default function TripsPage() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm text-slate-900 truncate max-w-[220px]">{trip.originAddress}</p>
-                          <p className="text-sm text-slate-500 truncate max-w-[220px] mt-1">{trip.destinationAddress}</p>
+                          <p className="text-sm text-slate-500 truncate max-w-[220px] mt-1">
+                            {trip.stops && trip.stops.length > 2
+                              ? `${trip.stops.length} stops → ${trip.destinationAddress}`
+                              : trip.destinationAddress}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -446,85 +575,180 @@ export default function TripsPage() {
                   </div>
                 </div>
 
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-800 mb-3">Origin</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Address</label>
-                      <input
-                        type="text"
-                        required
-                        value={form.originAddress}
-                        onChange={(e) => updateField('originAddress', e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Latitude</label>
-                        <input
-                          type="number"
-                          step="any"
-                          required
-                          value={form.originLat}
-                          onChange={(e) => updateField('originLat', e.target.value)}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Longitude</label>
-                        <input
-                          type="number"
-                          step="any"
-                          required
-                          value={form.originLng}
-                          onChange={(e) => updateField('originLng', e.target.value)}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                <div className="flex gap-2 p-1 rounded-xl bg-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setUseMultiStop(false)}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${!useMultiStop ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Single trip (A → B)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUseMultiStop(true)}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${useMultiStop ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Multi-stop (pickups & dropoffs)
+                  </button>
                 </div>
 
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-800 mb-3">Destination</h3>
-                  <div className="space-y-3">
+                {!useMultiStop ? (
+                  <>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Address</label>
-                      <input
-                        type="text"
-                        required
-                        value={form.destinationAddress}
-                        onChange={(e) => updateField('destinationAddress', e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
-                      />
-                    </div>
+                      <h3 className="text-sm font-semibold text-slate-800 mb-3">Origin</h3>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1.5">Address</label>
+                          <input
+                            type="text"
+                            required
+                            value={form.originAddress}
+                            onChange={(e) => updateField('originAddress', e.target.value)}
+                            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                          />
+                        </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Latitude</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Latitude <span className="text-slate-400 font-normal">(optional)</span></label>
                         <input
                           type="number"
                           step="any"
-                          required
-                          value={form.destinationLat}
-                          onChange={(e) => updateField('destinationLat', e.target.value)}
+                          value={form.originLat}
+                          onChange={(e) => updateField('originLat', e.target.value)}
+                          placeholder="e.g. 18.4386"
                           className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Longitude</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Longitude <span className="text-slate-400 font-normal">(optional)</span></label>
                         <input
                           type="number"
                           step="any"
-                          required
-                          value={form.destinationLng}
-                          onChange={(e) => updateField('destinationLng', e.target.value)}
+                          value={form.originLng}
+                          onChange={(e) => updateField('originLng', e.target.value)}
+                          placeholder="e.g. 79.1288"
                           className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
                         />
                       </div>
                     </div>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-800 mb-3">Destination</h3>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1.5">Address</label>
+                          <input
+                            type="text"
+                            required
+                            value={form.destinationAddress}
+                            onChange={(e) => updateField('destinationAddress', e.target.value)}
+                            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                          />
+                        </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Latitude <span className="text-slate-400 font-normal">(optional)</span></label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={form.destinationLat}
+                          onChange={(e) => updateField('destinationLat', e.target.value)}
+                          placeholder="e.g. 17.9689"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Longitude <span className="text-slate-400 font-normal">(optional)</span></label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={form.destinationLng}
+                          onChange={(e) => updateField('destinationLng', e.target.value)}
+                          placeholder="e.g. 79.5941"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-slate-800">Stops (pickups & dropoffs)</h3>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => addStop('PICKUP')}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" /> Add Pickup
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addStop('DROPOFF')}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-red-500" /> Add Drop-off
+                        </button>
+                        {stops.length >= 2 && (
+                          <button
+                            type="button"
+                            onClick={handleOptimize}
+                            disabled={optimizing}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50 transition-colors"
+                          >
+                            {optimizing ? 'Optimizing…' : 'Optimize route'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {stops.length === 0 ? (
+                        <p className="text-sm text-slate-500 py-4 text-center">Add at least 2 stops. Click &quot;Optimize route&quot; to find the best order.</p>
+                      ) : (
+                        stops.map((stop, idx) => (
+                          <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${stop.type === 'PICKUP' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                {idx + 1}. {stop.type}
+                              </span>
+                              <button type="button" onClick={() => removeStop(idx)} className="text-slate-400 hover:text-red-600 text-sm">
+                                Remove
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Address"
+                              value={stop.address}
+                              onChange={(e) => updateStop(idx, 'address', e.target.value)}
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                type="number"
+                                step="any"
+                                placeholder="Lat (optional, for route optimization)"
+                                value={stop.lat}
+                                onChange={(e) => updateStop(idx, 'lat', e.target.value)}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                              />
+                              <input
+                                type="number"
+                                step="any"
+                                placeholder="Lng (optional)"
+                                value={stop.lng}
+                                onChange={(e) => updateStop(idx, 'lng', e.target.value)}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                              />
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>

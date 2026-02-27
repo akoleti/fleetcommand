@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { handleAuthResponse } from '@/lib/api'
 
 interface Alert {
   id: string
@@ -67,6 +68,7 @@ export default function AlertsPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
 
+      if (!handleAuthResponse(response)) return
       if (!response.ok) throw new Error('Failed to fetch alerts')
 
       const data: PaginatedResponse = await response.json()
@@ -98,6 +100,7 @@ export default function AlertsPage() {
         body: JSON.stringify({ acknowledged: true }),
       })
 
+      if (!handleAuthResponse(response)) return
       if (!response.ok) throw new Error('Failed to acknowledge alert')
 
       setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, acknowledged: true } : a)))

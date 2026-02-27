@@ -263,16 +263,21 @@ model GpsLocation {
 // TRIPS & DELIVERY
 // ============================================================================
 
+enum StopType {
+  PICKUP
+  DROPOFF
+}
+
 model Trip {
   id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   truckId         String     @db.Uuid
   driverId        String     @db.Uuid
   originAddress   String
-  originLat       Float
-  originLng       Float
+  originLat       Float?
+  originLng       Float?
   destinationAddress String
-  destinationLat  Float
-  destinationLng  Float
+  destinationLat  Float?
+  destinationLng  Float?
   scheduledStart  DateTime
   scheduledEnd    DateTime?
   actualStart     DateTime?
@@ -287,12 +292,29 @@ model Trip {
   driver         Driver         @relation(fields: [driverId], references: [id])
   createdBy      User?          @relation("TripCreator", fields: [createdById], references: [id])
   deliveryProofs DeliveryProof[]
+  stops          TripStop[]
 
   @@index([truckId])
   @@index([driverId])
   @@index([status])
   @@index([scheduledStart])
   @@map("trips")
+}
+
+model TripStop {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tripId    String   @db.Uuid
+  sequence  Int
+  type      StopType
+  address   String
+  lat       Float?
+  lng       Float?
+  notes     String?
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("trip_stops")
 }
 
 model DeliveryProof {
