@@ -1,0 +1,26 @@
+{
+  "extends": ["//"],
+  "globalDependencies": ["**/.env.local", "**/.env"],
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**", ".next/**", ".expo/**"],
+      "cache": false,
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "outputs": ["coverage/**"],
+      "cache": false
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "outputs": [".eslintcache"],
+      "cache": true
+    },
+    "type-check": {
+      "outputs": []
+    }
+  }
+}
