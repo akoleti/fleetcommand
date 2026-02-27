@@ -2,12 +2,12 @@
  * POST /api/auth/change-password - Change user password
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { withAuth } from '@/middleware/auth'
+import { withAuth, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma, handlePrismaError } from '@/lib/db'
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const { user } = request
     const body = await request.json()
