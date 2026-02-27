@@ -181,7 +181,7 @@ export default function FuelLogDetailPage() {
             </div>
             <div className="flex items-center justify-between">
               <dt className="text-sm text-slate-500">Odometer</dt>
-              <dd className="text-sm font-medium text-slate-900 tabular-nums">{log.odometer.toLocaleString()} mi</dd>
+              <dd className="text-sm font-medium text-slate-900 tabular-nums">{log.odometer.toLocaleString()} km</dd>
             </div>
             <div className="flex items-center justify-between">
               <dt className="text-sm text-slate-500">Station</dt>

@@ -13,14 +13,15 @@ import * as bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
-const TRUCK_MAKES = ['Tata', 'Ashok Leyland', 'Mahindra', 'Eicher', 'BharatBenz', 'Volvo Eicher']
+const TRUCK_MAKES = ['Tata', 'Ashok Leyland', 'Mahindra', 'Eicher', 'BharatBenz', 'Volvo Eicher', 'SML Isuzu']
 const TRUCK_MODELS: Record<string, string[]> = {
-  Tata: ['Signa', 'Prima', 'Ultra', 'LPT', 'LPT 3118'],
-  'Ashok Leyland': ['Dost', 'Partner', 'Boss', 'Captain', 'Ecomet'],
-  Mahindra: ['Blazo', 'Blazo X', 'Furio', 'Truxo'],
-  Eicher: ['Pro', 'Pro 6031', 'Pro 6042', 'Skyline'],
-  BharatBenz: ['3128R', '4828R', '3128T', '1617R'],
-  'Volvo Eicher': ['Pro 6031', 'Pro 6042', 'Pro 2115'],
+  Tata: ['Signa', 'Prima', 'Ultra', 'LPT', 'LPT 3118', '407 Gold SFC', 'Ace Gold'],
+  'Ashok Leyland': ['Dost', 'Bada Dost', 'Partner', 'Boss', 'Captain', 'Ecomet', 'Ecomet 1615'],
+  Mahindra: ['Blazo', 'Blazo X', 'Furio', 'Truxo', 'Jeeto', 'JAYO'],
+  Eicher: ['Pro', 'Pro 6031', 'Pro 6042', 'Pro 2049', 'Pro 3015', 'Pro 3019', 'Skyline'],
+  BharatBenz: ['3128R', '4828R', '3128T', '1617R', '1214R', '2528R'],
+  'Volvo Eicher': ['Pro 6031', 'Pro 6042', 'Pro 2115', 'Pro 3015'],
+  'SML Isuzu': ['S-Cab', 'MAGNUM', 'REX', 'D-MAX'],
 }
 
 function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)] }

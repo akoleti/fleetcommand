@@ -378,6 +378,25 @@ export default function TruckDetailPage() {
     } catch {}
   }
 
+  const fetchDriversForTripModal = async () => {
+    try {
+      const token = localStorage.getItem('accessToken')
+      const r = await fetch('/api/drivers?status=available&limit=100', { headers: { Authorization: `Bearer ${token}` } })
+      if (!handleAuthResponse(r)) return
+      if (r.ok) {
+        const d = await r.json()
+        const drivers: AvailableDriver[] = d.data ?? d
+        // Include truck's assigned driver even if not "available" (e.g. ON_TRIP, OFF_DUTY)
+        if (truck?.currentDriver && !drivers.some((dd: AvailableDriver) => dd.id === truck.currentDriver!.id)) {
+          const cd = truck.currentDriver
+          setAvailableDrivers([{ id: cd.id, name: cd.name, licenseNumber: cd.licenseNumber, phone: cd.phone, status: cd.status }, ...drivers])
+        } else {
+          setAvailableDrivers(drivers)
+        }
+      }
+    } catch {}
+  }
+
   const openDriverModal = () => {
     setDriverError(null)
     setSelectedDriverId('')
@@ -419,9 +438,10 @@ export default function TruckDetailPage() {
 
   const openTripModal = () => {
     setTripError(null)
-    setTripForm({ driverId: '', originAddress: '', originLat: '', originLng: '', destinationAddress: '', destinationLat: '', destinationLng: '', scheduledStart: '', scheduledEnd: '', notes: '' })
+    const defaultDriverId = truck?.currentDriver?.id ?? ''
+    setTripForm({ driverId: defaultDriverId, originAddress: '', originLat: '', originLng: '', destinationAddress: '', destinationLat: '', destinationLng: '', scheduledStart: '', scheduledEnd: '', notes: '' })
     setTripModalOpen(true)
-    fetchAvailableDrivers()
+    fetchDriversForTripModal()
   }
 
   const handleTripSubmit = async (e: React.FormEvent) => {
@@ -1146,7 +1166,7 @@ export default function TruckDetailPage() {
                       <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Liters</th>
                       <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Price/L</th>
                       <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Total</th>
-                      <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 pr-5">Odometer</th>
+                      <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 pr-5">Odometer (km)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1168,7 +1188,7 @@ export default function TruckDetailPage() {
                           ₹{log.totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 text-right pr-5">
-                          {log.odometer != null ? log.odometer.toLocaleString() : <span className="text-slate-400">&mdash;</span>}
+                          {log.odometer != null ? `${log.odometer.toLocaleString()} km` : <span className="text-slate-400">&mdash;</span>}
                         </td>
                       </tr>
                     ))}
@@ -1304,9 +1324,9 @@ export default function TruckDetailPage() {
             <form onSubmit={handleTripSubmit} className="space-y-4">
               <div>
                 <label className={labelCls}>Driver</label>
-                <select value={tripForm.driverId} onChange={(e) => setTripForm({ ...tripForm, driverId: e.target.value })} className={inputCls}>
-                  <option value="">Select driver (optional)...</option>
-                  {availableDrivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                <select required value={tripForm.driverId} onChange={(e) => setTripForm({ ...tripForm, driverId: e.target.value })} className={inputCls}>
+                  <option value="">Select a driver</option>
+                  {availableDrivers.map((d) => <option key={d.id} value={d.id}>{d.name} — {d.licenseNumber}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-3 gap-3">
@@ -1429,7 +1449,7 @@ export default function TruckDetailPage() {
               )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Odometer (mi)</label>
+                  <label className={labelCls}>Odometer (km)</label>
                   <input type="number" required placeholder="245000" value={fuelForm.odometer}
                     onChange={(e) => setFuelForm({ ...fuelForm, odometer: e.target.value })} className={inputCls} />
                 </div>

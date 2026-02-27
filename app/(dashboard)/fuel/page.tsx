@@ -509,7 +509,7 @@ export default function FuelPage() {
                   <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Liters</th>
                   <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Price/L</th>
                   <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Total Cost</th>
-                  <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Odometer</th>
+                  <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Odometer (km)</th>
                   <th scope="col" className="relative py-3 pl-3 pr-5"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -532,7 +532,7 @@ export default function FuelPage() {
                       {formatCurrency(log.totalCost)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 tabular-nums">
-                      {log.odometer != null ? log.odometer.toLocaleString() : <span className="text-slate-400">—</span>}
+                      {log.odometer != null ? `${log.odometer.toLocaleString()} km` : <span className="text-slate-400">—</span>}
                     </td>
                     <td className="whitespace-nowrap py-4 pl-3 pr-5 text-right">
                       <Link href={`/fuel/${log.id}`} className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors">
