@@ -3,8 +3,8 @@
  * PATCH /api/auth/me - Update profile (name, email, phone)
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { withAuth } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withAuth, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma, handlePrismaError } from '@/lib/db'
 
 export const GET = withAuth(async (request) => {
@@ -41,7 +41,7 @@ export const GET = withAuth(async (request) => {
   }
 })
 
-export const PATCH = withAuth(async (request: NextRequest) => {
+export const PATCH = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const { user } = request
     const body = await request.json()

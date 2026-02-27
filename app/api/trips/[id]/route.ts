@@ -7,8 +7,8 @@
  * DELETE /api/trips/[id] - Cancel trip (owner/manager only, scheduled only)
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { withAuth, withRole } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withAuth, withRole, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma } from '@/lib/db'
 import { handlePrismaError } from '@/lib/db'
 import { UserRole, TripStatus, DriverStatus } from '@prisma/client'
@@ -28,7 +28,7 @@ interface RouteParams {
  * - OWNER/MANAGER: can view any trip in their org
  * - DRIVER: can only view own trips
  */
-export const GET = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id } = await params
@@ -107,7 +107,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
 
     return NextResponse.json(trip)
   } catch (error) {
-    console.error(`GET /api/trips/${id} error:`, error)
+    console.error('GET /api/trips/[id] error:', error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },
@@ -130,7 +130,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
  * - deliveryProofId: string (required if status = COMPLETED and proof was required)
  * - notes: string (optional)
  */
-export const PATCH = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id } = await params
@@ -228,8 +228,8 @@ export const PATCH = withAuth(async (request: NextRequest, { params }: RoutePara
     }
 
     // Update trip in transaction
-    const operations = [
-      prisma.trip.update({
+    const updatedTrip = await prisma.$transaction(async (tx) => {
+      const tripResult = await tx.trip.update({
         where: { id },
         data: updateData,
         include: {
@@ -257,25 +257,22 @@ export const PATCH = withAuth(async (request: NextRequest, { params }: RoutePara
             },
           },
         },
-      }),
-    ]
+      })
 
-    // If trip is completed or cancelled, set driver back to AVAILABLE
-    if (status === TripStatus.COMPLETED || status === TripStatus.CANCELLED) {
-      operations.push(
-        prisma.driver.update({
+      // If trip is completed or cancelled, set driver back to AVAILABLE
+      if (status === TripStatus.COMPLETED || status === TripStatus.CANCELLED) {
+        await tx.driver.update({
           where: { id: trip.driverId },
           data: { status: DriverStatus.AVAILABLE },
         })
-      )
-    }
+      }
 
-    const result = await prisma.$transaction(operations)
-    const updatedTrip = result[0]
+      return tripResult
+    })
 
     return NextResponse.json(updatedTrip)
   } catch (error) {
-    console.error(`PATCH /api/trips/${id} error:`, error)
+    console.error('PATCH /api/trips/[id] error:', error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },
@@ -291,7 +288,7 @@ export const PATCH = withAuth(async (request: NextRequest, { params }: RoutePara
  * Can only cancel SCHEDULED trips
  */
 export const DELETE = withRole(UserRole.OWNER, UserRole.MANAGER)(
-  async (request: NextRequest, { params }: RouteParams) => {
+  async (request: AuthenticatedRequest, { params }: RouteParams) => {
     try {
       const { user } = request
       const { id } = await params
@@ -349,7 +346,7 @@ export const DELETE = withRole(UserRole.OWNER, UserRole.MANAGER)(
         message: 'Trip cancelled successfully',
       })
     } catch (error) {
-      console.error(`DELETE /api/trips/${id} error:`, error)
+      console.error('DELETE /api/trips/[id] error:', error)
       const { code, message } = handlePrismaError(error)
       return NextResponse.json(
         { error: message, code },

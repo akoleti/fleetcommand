@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { withAuth, withRole } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withAuth, withRole, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma } from '@/lib/db'
 import { handlePrismaError } from '@/lib/db'
 import { UserRole } from '@prisma/client'
@@ -8,7 +8,7 @@ interface RouteParams {
   params: Promise<{ id: string }>
 }
 
-export const GET = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id } = await params
@@ -68,7 +68,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
   }
 })
 
-export const PATCH = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id } = await params
@@ -77,7 +77,7 @@ export const PATCH = withAuth(async (request: NextRequest, { params }: RoutePara
     // Completing with proof: allow DRIVER. Other updates: require OWNER/MANAGER.
     const isCompletingWithProof =
       body.status === 'COMPLETED' && body.maintenanceProofId
-    if (!isCompletingWithProof && ![UserRole.OWNER, UserRole.MANAGER].includes(user.role)) {
+    if (!isCompletingWithProof && !([UserRole.OWNER, UserRole.MANAGER] as readonly UserRole[]).includes(user.role)) {
       return NextResponse.json(
         { error: 'Access denied. Owner or Manager required.', code: 'INSUFFICIENT_ROLE' },
         { status: 403 }
@@ -144,7 +144,7 @@ export const PATCH = withAuth(async (request: NextRequest, { params }: RoutePara
 })
 
 export const DELETE = withRole(UserRole.OWNER)(
-  async (request: NextRequest, { params }: RouteParams) => {
+  async (request: AuthenticatedRequest, { params }: RouteParams) => {
     try {
       const { user } = request
       const { id } = await params

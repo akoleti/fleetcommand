@@ -4,8 +4,8 @@
  * PATCH /api/trucks/[id]/location - Update truck's current location (OWNER/MANAGER/DRIVER for assigned)
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { withAuth } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withAuth, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma, handlePrismaError } from '@/lib/db'
 import { UserRole } from '@prisma/client'
 
@@ -13,7 +13,7 @@ interface RouteParams {
   params: Promise<{ id: string }>
 }
 
-export const PATCH = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id: truckId } = await params

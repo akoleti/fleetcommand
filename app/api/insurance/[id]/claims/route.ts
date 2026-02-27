@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { withAuth, withRole } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withAuth, withRole, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma } from '@/lib/db'
 import { getPaginationParams, createPaginatedResult, handlePrismaError } from '@/lib/db'
 import { UserRole, ClaimStatus } from '@prisma/client'
@@ -8,7 +8,7 @@ interface RouteParams {
   params: Promise<{ id: string }>
 }
 
-export const GET = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id: policyId } = await params
@@ -58,7 +58,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
 })
 
 export const POST = withRole(UserRole.OWNER, UserRole.MANAGER)(
-  async (request: NextRequest, { params }: RouteParams) => {
+  async (request: AuthenticatedRequest, { params }: RouteParams) => {
     try {
       const { user } = request
       const { id: policyId } = await params

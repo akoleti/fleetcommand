@@ -4,8 +4,8 @@
  * GET /api/maintenance-proof/[id] - Get proof with presigned/media URLs
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { withAuth } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withAuth, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma, handlePrismaError } from '@/lib/db'
 import { generatePresignedDownloadUrl } from '@/lib/s3'
 
@@ -13,7 +13,7 @@ interface RouteParams {
   params: Promise<{ id: string }>
 }
 
-export const GET = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id } = await params

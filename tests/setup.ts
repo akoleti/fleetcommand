@@ -10,7 +10,7 @@ import * as path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 // Set test environment variables
-process.env.NODE_ENV = 'test';
+(process.env as { NODE_ENV?: string }).NODE_ENV = 'test';
 
 // Extend Jest timeout for database operations
 jest.setTimeout(30000);

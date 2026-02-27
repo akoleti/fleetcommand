@@ -6,8 +6,8 @@
  * PATCH /api/drivers/[id] - Update driver (owner/manager)
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { withAuth, withRole } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withAuth, withRole, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma } from '@/lib/db'
 import { handlePrismaError } from '@/lib/db'
 import { UserRole } from '@prisma/client'
@@ -31,7 +31,7 @@ interface RouteParams {
  * - Own profile visible to driver
  * - MANAGER/OWNER see all
  */
-export const GET = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id } = await params
@@ -138,7 +138,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
       daysUntilLicenseExpiry: daysUntilExpiry,
     })
   } catch (error) {
-    console.error(`GET /api/drivers/${id} error:`, error)
+    console.error('GET /api/drivers/[id] error:', error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },
@@ -156,7 +156,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
  * Body: Partial driver data
  */
 export const PATCH = withRole(UserRole.OWNER, UserRole.MANAGER)(
-  async (request: NextRequest, { params }: RouteParams) => {
+  async (request: AuthenticatedRequest, { params }: RouteParams) => {
     try {
       const { user } = request
       const { id } = await params
@@ -222,7 +222,7 @@ export const PATCH = withRole(UserRole.OWNER, UserRole.MANAGER)(
 
       return NextResponse.json(updatedDriver)
     } catch (error) {
-      console.error(`PATCH /api/drivers/${id} error:`, error)
+      console.error('PATCH /api/drivers/[id] error:', error)
       const { code, message } = handlePrismaError(error)
       return NextResponse.json(
         { error: message, code },
