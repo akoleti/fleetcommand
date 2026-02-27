@@ -4,6 +4,24 @@ import React, { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { fetchWithAuth } from '@/lib/api'
+import { CloseMaintenanceModal } from '@/components/maintenance/CloseMaintenanceModal'
+
+interface MaintenanceMediaItem {
+  id: string
+  type: string
+  mimeType: string | null
+  fileUrl?: string | null
+  downloadUrl?: string
+  createdAt: string
+}
+
+interface MaintenanceProof {
+  id: string
+  signedBy: string
+  notes: string | null
+  capturedAt: string
+  media: MaintenanceMediaItem[]
+}
 
 interface MaintenanceRecord {
   id: string
@@ -30,6 +48,7 @@ interface MaintenanceRecord {
     model: string
   }
   insuranceClaim?: { id: string; status: string } | null
+  proofs?: MaintenanceProof[]
 }
 
 const statusConfig: Record<string, { bg: string; text: string; dot: string }> = {
@@ -68,6 +87,7 @@ export default function MaintenanceDetailPage() {
   const [record, setRecord] = useState<MaintenanceRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showCloseModal, setShowCloseModal] = useState(false)
 
   useEffect(() => {
     if (id) fetchRecord()
@@ -158,15 +178,28 @@ export default function MaintenanceDetailPage() {
             </div>
           </div>
         </div>
-        <Link
-          href={`/trucks/${record.truck.id}`}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
-        >
-          View Truck
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-          </svg>
-        </Link>
+        <div className="flex items-center gap-2">
+          {(record.status === 'SCHEDULED' || record.status === 'IN_PROGRESS') && (
+            <button
+              onClick={() => setShowCloseModal(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Close Maintenance
+            </button>
+          )}
+          <Link
+            href={`/trucks/${record.truck.id}`}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+          >
+            View Truck
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+            </svg>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -267,6 +300,61 @@ export default function MaintenanceDetailPage() {
           </dl>
         </div>
       </div>
+
+      {/* Completion proof (when closed with proof) */}
+      {record.status === 'COMPLETED' && record.proofs && record.proofs.length > 0 && (
+        <div className="mt-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+          <div className="px-6 py-4 border-b border-slate-100">
+            <h3 className="font-semibold text-slate-900">Completion Proof</h3>
+          </div>
+          <div className="px-6 py-4 space-y-4">
+            {record.proofs.map((proof) => (
+              <div key={proof.id} className="space-y-2">
+                <p className="text-sm text-slate-700">
+                  <span className="font-medium">Signed by:</span> {proof.signedBy}
+                </p>
+                {proof.notes && (
+                  <p className="text-sm text-slate-600">{proof.notes}</p>
+                )}
+                {proof.media && proof.media.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {proof.media.map((m) => (
+                      <div key={m.id} className="rounded-lg border border-slate-200 overflow-hidden">
+                        {m.type === 'SIGNATURE' || (m.mimeType?.startsWith('image/') && m.fileUrl) ? (
+                          <img
+                            src={m.fileUrl || '#'}
+                            alt={m.type}
+                            className="h-20 w-auto object-contain bg-slate-50"
+                          />
+                        ) : (
+                          <a
+                            href={m.fileUrl || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block px-3 py-2 text-sm text-brand-600 hover:underline"
+                          >
+                            View {m.type}
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Close Maintenance Modal */}
+      {showCloseModal && (
+        <CloseMaintenanceModal
+          maintenanceId={id}
+          maintenanceType={typeLabels[record.type] || record.type}
+          onClose={() => setShowCloseModal(false)}
+          onSuccess={fetchRecord}
+        />
+      )}
     </div>
   )
 }

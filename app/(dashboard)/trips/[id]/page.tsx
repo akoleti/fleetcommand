@@ -1,9 +1,11 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { handleAuthResponse } from '@/lib/api'
+import { SignaturePad } from '@/components/delivery/SignaturePad'
+import { useUploadThing } from '@/lib/uploadthing'
 
 interface MediaItem {
   id: string
@@ -91,10 +93,43 @@ export default function TripDetailPage() {
   const [proofLoading, setProofLoading] = useState(false)
   const [recipientName, setRecipientName] = useState('')
   const [proofNotes, setProofNotes] = useState('')
+  const [statusUpdating, setStatusUpdating] = useState(false)
+  const [completeProofId, setCompleteProofId] = useState<string | null>(null)
+  const [addMediaForProofId, setAddMediaForProofId] = useState<string | null>(null)
+  const [mediaType, setMediaType] = useState<'signature' | 'photo' | null>(null)
+  const [mediaUploading, setMediaUploading] = useState(false)
+  const completeDropdownRef = useRef<HTMLDivElement>(null)
+
+  const { startUpload, isUploading } = useUploadThing('deliveryMedia', {
+    headers: () => ({
+      Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('accessToken') : ''}`,
+    }),
+    onClientUploadComplete: () => {
+      setAddMediaForProofId(null)
+      setMediaType(null)
+      setMediaUploading(false)
+      fetchTrip()
+    },
+    onUploadError: (err) => {
+      setError(err.message)
+      setMediaUploading(false)
+    },
+  })
 
   useEffect(() => {
     if (tripId) fetchTrip()
   }, [tripId])
+
+  useEffect(() => {
+    if (completeProofId !== 'choose') return
+    const handler = (e: MouseEvent) => {
+      if (completeDropdownRef.current && !completeDropdownRef.current.contains(e.target as Node)) {
+        setCompleteProofId(null)
+      }
+    }
+    setTimeout(() => document.addEventListener('click', handler), 0)
+    return () => document.removeEventListener('click', handler)
+  }, [completeProofId])
 
   const fetchTrip = async () => {
     try {
@@ -172,6 +207,58 @@ export default function TripDetailPage() {
     }
   }
 
+  const handleStartTrip = async () => {
+    try {
+      setStatusUpdating(true)
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch(`/api/trips/${tripId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'IN_PROGRESS' }),
+      })
+      if (!handleAuthResponse(res)) return
+      if (!res.ok) throw new Error('Failed to start trip')
+      fetchTrip()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start trip')
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
+  const handleCompleteTrip = async (deliveryProofId?: string) => {
+    try {
+      setStatusUpdating(true)
+      const token = localStorage.getItem('accessToken')
+      const body: { status: string; deliveryProofId?: string } = { status: 'COMPLETED' }
+      if (deliveryProofId) body.deliveryProofId = deliveryProofId
+      const res = await fetch(`/api/trips/${tripId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!handleAuthResponse(res)) return
+      if (!res.ok) throw new Error('Failed to complete trip')
+      setCompleteProofId(null)
+      fetchTrip()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to complete trip')
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
+  const handleSaveSignature = async (proofId: string, blob: Blob) => {
+    const file = new File([blob], `signature-${Date.now()}.png`, { type: 'image/png' })
+    setMediaUploading(true)
+    await startUpload([file], { proofId, type: 'SIGNATURE' })
+  }
+
+  const handleUploadPhoto = async (proofId: string, file: File) => {
+    setMediaUploading(true)
+    await startUpload([file], { proofId, type: 'PHOTO' })
+  }
+
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
@@ -226,7 +313,7 @@ export default function TripDetailPage() {
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-4 flex-1">
           <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center shrink-0">
             <svg className="w-7 h-7 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
@@ -276,6 +363,73 @@ export default function TripDetailPage() {
               )}
             </div>
           </div>
+        </div>
+        {/* Trip actions - Start / Complete (for drivers and managers) */}
+        <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+          {trip.status === 'SCHEDULED' && (
+            <button
+              onClick={handleStartTrip}
+              disabled={statusUpdating}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition-colors"
+            >
+              {statusUpdating ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                </svg>
+              )}
+              Start Trip
+            </button>
+          )}
+          {trip.status === 'IN_PROGRESS' && (
+            <div className="relative" ref={completeDropdownRef}>
+              <button
+                onClick={() => setCompleteProofId(completeProofId === 'choose' ? null : 'choose')}
+                disabled={statusUpdating}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              >
+                {statusUpdating ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+                Complete Trip
+              </button>
+              {completeProofId === 'choose' && (
+                <div className="absolute right-0 top-full mt-2 z-10 rounded-xl border border-slate-200 bg-white py-2 shadow-lg min-w-[220px]">
+                  <p className="px-4 py-2 text-xs font-medium text-slate-500">Complete with proof?</p>
+                  {trip.deliveryProofs?.length ? (
+                    trip.deliveryProofs.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => handleCompleteTrip(p.id)}
+                        className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        {p.recipientName}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-4 py-2 text-sm text-slate-500">No proof yet</p>
+                  )}
+                  <button
+                    onClick={() => handleCompleteTrip()}
+                    className="w-full px-4 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 border-t border-slate-100"
+                  >
+                    Complete without proof
+                  </button>
+                  <button
+                    onClick={() => setCompleteProofId(null)}
+                    className="w-full px-4 py-2 text-left text-sm text-slate-500 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -514,6 +668,74 @@ export default function TripDetailPage() {
                       </div>
                     )}
                   </dl>
+
+                  {/* Add signature / photo (when trip in progress) */}
+                  {trip.status === 'IN_PROGRESS' && addMediaForProofId === proof.id && mediaType === 'signature' && (
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                      <h5 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Collect signature</h5>
+                      <SignaturePad
+                        onSave={(blob) => handleSaveSignature(proof.id, blob)}
+                        onCancel={() => { setAddMediaForProofId(null); setMediaType(null) }}
+                        disabled={mediaUploading || isUploading}
+                      />
+                    </div>
+                  )}
+                  {trip.status === 'IN_PROGRESS' && addMediaForProofId === proof.id && mediaType === 'photo' && (
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                      <h5 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Upload photo</h5>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          id={`photo-${proof.id}`}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0]
+                            if (f) handleUploadPhoto(proof.id, f)
+                            e.target.value = ''
+                          }}
+                        />
+                        <label
+                          htmlFor={`photo-${proof.id}`}
+                          className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 cursor-pointer disabled:opacity-50"
+                        >
+                          {mediaUploading || isUploading ? 'Uploading...' : 'Choose photo'}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => { setAddMediaForProofId(null); setMediaType(null) }}
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {trip.status === 'IN_PROGRESS' && addMediaForProofId !== proof.id && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setAddMediaForProofId(proof.id); setMediaType('signature') }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                        </svg>
+                        Add signature
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAddMediaForProofId(proof.id); setMediaType('photo') }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                        </svg>
+                        Add photo
+                      </button>
+                    </div>
+                  )}
 
                   {/* Media Gallery */}
                   {proof.media?.length > 0 && (

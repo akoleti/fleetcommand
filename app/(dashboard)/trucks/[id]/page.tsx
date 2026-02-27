@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { gallonsToLiters, litersToGallons, GALLONS_TO_LITERS } from '@/lib/format'
 import { handleAuthResponse } from '@/lib/api'
+import { CloseMaintenanceModal } from '@/components/maintenance/CloseMaintenanceModal'
 
 interface Truck {
   id: string
@@ -215,6 +216,9 @@ export default function TruckDetailPage() {
   const [maintForm, setMaintForm] = useState({ type: 'OTHER', description: '', vendor: '', scheduledDate: '', notes: '' })
   const [maintSubmitting, setMaintSubmitting] = useState(false)
   const [maintError, setMaintError] = useState<string | null>(null)
+
+  // Close maintenance modal (from trucks page)
+  const [closeMaintId, setCloseMaintId] = useState<string | null>(null)
 
   // Fuel modal
   const [fuelModalOpen, setFuelModalOpen] = useState(false)
@@ -1036,11 +1040,13 @@ export default function TruckDetailPage() {
                     <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Scheduled</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Cost</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Vendor</th>
+                    <th className="relative py-3 pl-3 pr-5"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {maintenance.map((rec) => {
                     const ms = maintenanceStatusConfig[rec.status] || maintenanceStatusConfig.SCHEDULED
+                    const canClose = rec.status === 'SCHEDULED' || rec.status === 'IN_PROGRESS'
                     return (
                       <tr key={rec.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="whitespace-nowrap py-4 pl-5 pr-3 text-sm font-medium text-slate-900">
@@ -1063,6 +1069,24 @@ export default function TruckDetailPage() {
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600">
                           {rec.vendor || <span className="text-slate-400">&mdash;</span>}
+                        </td>
+                        <td className="whitespace-nowrap py-4 pl-3 pr-5">
+                          <div className="flex items-center gap-2">
+                            <Link href={`/maintenance/${rec.id}`} className="text-sm font-medium text-brand-600 hover:text-brand-700 transition-colors">
+                              View
+                            </Link>
+                            {canClose && (
+                              <>
+                                <span className="text-slate-300">|</span>
+                                <button
+                                  onClick={() => setCloseMaintId(rec.id)}
+                                  className="text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
+                                >
+                                  Close
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -1435,6 +1459,16 @@ export default function TruckDetailPage() {
             </form>
           </div>
         </ModalOverlay>
+      )}
+
+      {/* Close Maintenance Modal */}
+      {closeMaintId && (
+        <CloseMaintenanceModal
+          maintenanceId={closeMaintId}
+          maintenanceType={maintenance.find((m) => m.id === closeMaintId) ? maintenanceTypeLabels[maintenance.find((m) => m.id === closeMaintId)!.type] : undefined}
+          onClose={() => setCloseMaintId(null)}
+          onSuccess={refetchMaintenance}
+        />
       )}
 
       {/* Add Insurance Policy Modal */}

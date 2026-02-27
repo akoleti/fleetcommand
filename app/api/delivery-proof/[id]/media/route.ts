@@ -55,14 +55,19 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
     })
 
     const mediaWithUrls = await Promise.all(
-      media.map(async (m) => ({
-        id: m.id,
-        type: m.type,
-        mimeType: m.mimeType,
-        fileSize: m.fileSize,
-        createdAt: m.createdAt,
-        downloadUrl: await generatePresignedDownloadUrl(m.s3Bucket, m.s3Key),
-      }))
+      media.map(async (m) => {
+        const downloadUrl =
+          m.fileUrl ??
+          (m.s3Bucket && m.s3Key ? await generatePresignedDownloadUrl(m.s3Bucket, m.s3Key) : null)
+        return {
+          id: m.id,
+          type: m.type,
+          mimeType: m.mimeType,
+          fileSize: m.fileSize,
+          createdAt: m.createdAt,
+          downloadUrl,
+        }
+      })
     )
 
     return NextResponse.json({ media: mediaWithUrls })

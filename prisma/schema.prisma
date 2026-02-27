@@ -340,8 +340,9 @@ model DeliveryMedia {
   id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   proofId   String            @db.Uuid
   type      DeliveryMediaType
-  s3Key     String
-  s3Bucket  String
+  s3Key     String?           // S3 key or UploadThing key (legacy)
+  s3Bucket  String?           // S3 bucket or 'uploadthing' (legacy)
+  fileUrl   String?           // UploadThing URL (primary for new uploads)
   mimeType  String?
   fileSize  Int?
   createdAt DateTime          @default(now())
@@ -403,13 +404,16 @@ model Maintenance {
   odometer        Int?
   notes           String?
   insuranceClaimId String?          @db.Uuid
+  maintenanceProofId String?        @db.Uuid
   createdById     String?           @db.Uuid
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  truck          Truck           @relation(fields: [truckId], references: [id], onDelete: Cascade)
-  insuranceClaim InsuranceClaim? @relation(fields: [insuranceClaimId], references: [id])
-  createdBy      User?           @relation("MaintenanceCreator", fields: [createdById], references: [id])
+  truck          Truck             @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  insuranceClaim InsuranceClaim?   @relation(fields: [insuranceClaimId], references: [id])
+  createdBy      User?             @relation("MaintenanceCreator", fields: [createdById], references: [id])
+  proofs         MaintenanceProof[]
+  completionProof MaintenanceProof? @relation("MaintenanceCompletionProof", fields: [maintenanceProofId], references: [id])
 
   @@index([truckId])
   @@index([type])
@@ -417,6 +421,40 @@ model Maintenance {
   @@index([scheduledDate])
   @@index([nextDueDate])
   @@map("maintenance")
+}
+
+model MaintenanceProof {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  maintenanceId String @db.Uuid
+  signedBy   String   // Vendor or person who completed
+  notes      String?
+  capturedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  maintenance Maintenance         @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+  media       MaintenanceMedia[]
+  maintenanceAsCompletion Maintenance[] @relation("MaintenanceCompletionProof")
+
+  @@index([maintenanceId])
+  @@map("maintenance_proofs")
+}
+
+model MaintenanceMedia {
+  id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proofId   String            @db.Uuid
+  type      DeliveryMediaType // SIGNATURE, PHOTO, DOCUMENT
+  s3Key     String?
+  s3Bucket  String?
+  fileUrl   String?
+  mimeType  String?
+  fileSize  Int?
+  createdAt DateTime          @default(now())
+
+  proof MaintenanceProof @relation(fields: [proofId], references: [id], onDelete: Cascade)
+
+  @@index([proofId])
+  @@map("maintenance_media")
 }
 
 // ============================================================================

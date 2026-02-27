@@ -56,6 +56,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
             type: true,
             s3Key: true,
             s3Bucket: true,
+            fileUrl: true,
             mimeType: true,
             fileSize: true,
             createdAt: true,
@@ -80,14 +81,19 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
     }
 
     const mediaWithUrls = await Promise.all(
-      proof.media.map(async (m) => ({
-        id: m.id,
-        type: m.type,
-        mimeType: m.mimeType,
-        fileSize: m.fileSize,
-        createdAt: m.createdAt,
-        downloadUrl: await generatePresignedDownloadUrl(m.s3Bucket, m.s3Key),
-      }))
+      proof.media.map(async (m) => {
+        const downloadUrl =
+          m.fileUrl ??
+          (m.s3Bucket && m.s3Key ? await generatePresignedDownloadUrl(m.s3Bucket, m.s3Key) : null)
+        return {
+          id: m.id,
+          type: m.type,
+          mimeType: m.mimeType,
+          fileSize: m.fileSize,
+          createdAt: m.createdAt,
+          downloadUrl,
+        }
+      })
     )
 
     return NextResponse.json({
