@@ -7,8 +7,8 @@
  * DELETE /api/trucks/[id] - Soft delete truck (owner only)
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { withAuth, withRole } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withAuth, withRole, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma } from '@/lib/db'
 import { handlePrismaError } from '@/lib/db'
 import { UserRole, TruckStatus } from '@prisma/client'
@@ -28,7 +28,7 @@ interface RouteParams {
  * - OWNER/MANAGER: can view any truck in their org
  * - DRIVER: can only view assigned truck
  */
-export const GET = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id } = await params
@@ -90,7 +90,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
 
     return NextResponse.json(truck)
   } catch (error) {
-    console.error(`GET /api/trucks/${id} error:`, error)
+    console.error('GET /api/trucks/[id] error:', error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },
@@ -107,7 +107,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
  * 
  * Body: Partial truck data
  */
-export const PATCH = withRole(UserRole.OWNER)(async (request: NextRequest, { params }: RouteParams) => {
+export const PATCH = withRole(UserRole.OWNER)(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id } = await params
@@ -172,7 +172,7 @@ export const PATCH = withRole(UserRole.OWNER)(async (request: NextRequest, { par
 
     return NextResponse.json(updatedTruck)
   } catch (error) {
-    console.error(`PATCH /api/trucks/${id} error:`, error)
+    console.error('PATCH /api/trucks/[id] error:', error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },
@@ -187,7 +187,7 @@ export const PATCH = withRole(UserRole.OWNER)(async (request: NextRequest, { par
  * Soft delete: set status = 'INACTIVE' (OWNER only)
  * Never hard delete trucks
  */
-export const DELETE = withRole(UserRole.OWNER)(async (request: NextRequest, { params }: RouteParams) => {
+export const DELETE = withRole(UserRole.OWNER)(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id } = await params
@@ -236,7 +236,7 @@ export const DELETE = withRole(UserRole.OWNER)(async (request: NextRequest, { pa
       truck: deletedTruck,
     })
   } catch (error) {
-    console.error(`DELETE /api/trucks/${id} error:`, error)
+    console.error('DELETE /api/trucks/[id] error:', error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import type { Prisma } from '@prisma/client'
 import { sendAlertEmail } from '@/lib/sendgrid'
 import { sendAlertSms } from '@/lib/twilio'
 import { sendAlertPush } from '@/lib/fcm'
@@ -25,7 +26,7 @@ export async function createAlert(params: CreateAlertParams): Promise<Alert> {
       severity: params.severity,
       title: params.title,
       message: params.message,
-      data: params.data ?? {},
+      data: (params.data ?? {}) as Prisma.InputJsonValue,
     },
   })
 

@@ -5,8 +5,8 @@
  * PATCH /api/trucks/[id]/assign - Assign or unassign driver
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { withRole } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withRole, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma } from '@/lib/db'
 import { handlePrismaError } from '@/lib/db'
 import { UserRole, TruckStatus, DriverStatus } from '@prisma/client'
@@ -31,7 +31,7 @@ interface RouteParams {
  * - Updates driver status to ON_TRIP (when assigning) or AVAILABLE (when unassigning)
  */
 export const PATCH = withRole(UserRole.OWNER, UserRole.MANAGER)(
-  async (request: NextRequest, { params }: RouteParams) => {
+  async (request: AuthenticatedRequest, { params }: RouteParams) => {
     try {
       const { user } = request
       const { id: truckId } = await params
@@ -200,7 +200,7 @@ export const PATCH = withRole(UserRole.OWNER, UserRole.MANAGER)(
         truck: updatedTruck,
       })
     } catch (error) {
-      console.error(`PATCH /api/trucks/${truckId}/assign error:`, error)
+      console.error('PATCH /api/trucks/[id]/assign error:', error)
       const { code, message } = handlePrismaError(error)
       return NextResponse.json(
         { error: message, code },

@@ -4,12 +4,12 @@
  * POST /api/maintenance-proof - Create maintenance proof (maintenance must be SCHEDULED or IN_PROGRESS)
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { withAuth } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withAuth, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma, handlePrismaError } from '@/lib/db'
 import { MaintenanceStatus } from '@prisma/client'
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const { user } = request
     const body = await request.json()
@@ -41,7 +41,7 @@ export const POST = withAuth(async (request: NextRequest) => {
       )
     }
 
-    if (![MaintenanceStatus.SCHEDULED, MaintenanceStatus.IN_PROGRESS].includes(maintenance.status)) {
+    if (!([MaintenanceStatus.SCHEDULED, MaintenanceStatus.IN_PROGRESS] as readonly MaintenanceStatus[]).includes(maintenance.status)) {
       return NextResponse.json(
         { error: 'Maintenance must be SCHEDULED or IN_PROGRESS to add proof', code: 'INVALID_STATUS' },
         { status: 400 }

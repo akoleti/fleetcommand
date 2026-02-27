@@ -6,8 +6,8 @@
  * POST /api/delivery-proof/[id]/media - Create media record + presigned upload URL
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { withAuth } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withAuth, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma, handlePrismaError } from '@/lib/db'
 import {
   generatePresignedUploadUrl,
@@ -21,7 +21,7 @@ interface RouteParams {
   params: Promise<{ id: string }>
 }
 
-export const GET = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id: proofId } = await params
@@ -78,7 +78,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
   }
 })
 
-export const POST = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const POST = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id: proofId } = await params

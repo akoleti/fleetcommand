@@ -4,8 +4,8 @@
  * DELETE /api/fuel-stations/[id] - Remove a fuel station (OWNER/MANAGER only)
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { withRole } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withRole, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma, handlePrismaError } from '@/lib/db'
 import { UserRole } from '@prisma/client'
 
@@ -14,7 +14,7 @@ interface RouteParams {
 }
 
 export const DELETE = withRole(UserRole.OWNER, UserRole.MANAGER)(
-  async (request: NextRequest, { params }: RouteParams) => {
+  async (request: AuthenticatedRequest, { params }: RouteParams) => {
     try {
       const { user } = request
       const { id } = await params

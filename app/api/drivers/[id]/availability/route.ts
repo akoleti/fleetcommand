@@ -5,8 +5,8 @@
  * PATCH /api/drivers/[id]/availability - Update driver availability status
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { withRole } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withRole, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma } from '@/lib/db'
 import { handlePrismaError } from '@/lib/db'
 import { UserRole, DriverStatus } from '@prisma/client'
@@ -28,7 +28,7 @@ interface RouteParams {
  * Note: ON_TRIP status is automatically set by trip assignment/completion
  */
 export const PATCH = withRole(UserRole.OWNER, UserRole.MANAGER)(
-  async (request: NextRequest, { params }: RouteParams) => {
+  async (request: AuthenticatedRequest, { params }: RouteParams) => {
     try {
       const { user } = request
       const { id } = await params
@@ -42,7 +42,7 @@ export const PATCH = withRole(UserRole.OWNER, UserRole.MANAGER)(
         DriverStatus.SUSPENDED,
       ]
 
-      if (!status || !allowedStatuses.includes(status as DriverStatus)) {
+      if (!status || !(allowedStatuses as readonly DriverStatus[]).includes(status as DriverStatus)) {
         return NextResponse.json(
           { 
             error: `Invalid status. Allowed: ${allowedStatuses.join(', ')}`,
@@ -121,7 +121,7 @@ export const PATCH = withRole(UserRole.OWNER, UserRole.MANAGER)(
         driver: updatedDriver,
       })
     } catch (error) {
-      console.error(`PATCH /api/drivers/${id}/availability error:`, error)
+      console.error('PATCH /api/drivers/[id]/availability error:', error)
       const { code, message } = handlePrismaError(error)
       return NextResponse.json(
         { error: message, code },
