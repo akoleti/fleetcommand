@@ -6,6 +6,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
+
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma, handlePrismaError } from '@/lib/db'
