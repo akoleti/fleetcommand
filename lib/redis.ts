@@ -7,33 +7,29 @@
 
 import { createClient } from 'redis'
 
-const REDIS_URL = process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL
+const REDIS_URL = process.env.REDIS_URL
 
-if (!REDIS_URL) {
-  console.warn('⚠️  REDIS_URL not configured. Rate limiting will be disabled.')
+const isValidRedisUrl = REDIS_URL && (REDIS_URL.startsWith('redis://') || REDIS_URL.startsWith('rediss://'))
+
+if (!isValidRedisUrl) {
+  console.warn('⚠️  REDIS_URL not configured (or is a REST URL). Redis features will be disabled — the app works fine without it.')
 }
 
-// Create Redis client
-export const redis = REDIS_URL
+export const redis = isValidRedisUrl
   ? createClient({
       url: REDIS_URL,
       socket: {
         reconnectStrategy: (retries) => {
-          if (retries > 10) {
-            return new Error('Max reconnection attempts reached')
-          }
+          if (retries > 10) return new Error('Max reconnection attempts reached')
           return Math.min(retries * 100, 3000)
         },
       },
     })
   : null
 
-// Connect to Redis
 if (redis) {
   redis.on('error', (err) => console.error('Redis Client Error:', err))
   redis.on('connect', () => console.log('✅ Redis connected'))
-  
-  // Connect immediately
   redis.connect().catch((err) => {
     console.error('Failed to connect to Redis:', err)
   })

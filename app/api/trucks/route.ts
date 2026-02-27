@@ -12,12 +12,30 @@ import { prisma } from '@/lib/db'
 import { getPaginationParams, createPaginatedResult, handlePrismaError } from '@/lib/db'
 import { TruckStatus, UserRole } from '@prisma/client'
 
+const DELIVERY_BUCKETS: Record<string, { min: number; max: number }> = {
+  '0': { min: 0, max: 0 },
+  '1-5': { min: 1, max: 5 },
+  '6-10': { min: 6, max: 10 },
+  '11-20': { min: 11, max: 20 },
+  '20+': { min: 21, max: Infinity },
+}
+
+const MILEAGE_BUCKETS: Record<string, { min: number; max: number }> = {
+  '0': { min: 0, max: 0 },
+  '1-1k': { min: 1, max: 1000 },
+  '1k-5k': { min: 1001, max: 5000 },
+  '5k-10k': { min: 5001, max: 10000 },
+  '10k+': { min: 10001, max: Infinity },
+}
+
 /**
  * GET /api/trucks
  * 
  * Query params:
- * - status: moving|idle|alert|all (default: all)
+ * - status: moving|idle|alert|maintenance|all (default: all)
  * - search: search by truck code or plate
+ * - deliveryBucket: 0|1-5|6-10|11-20|20+
+ * - mileageBucket: 0|1-1k|1k-5k|5k-10k|10k+
  * - page: page number (default: 1)
  * - limit: items per page (default: 20, max: 100)
  * 
@@ -32,12 +50,81 @@ export const GET = withAuth(async (request) => {
     
     const statusParam = searchParams.get('status') || 'all'
     const search = searchParams.get('search') || ''
+    const deliveryBucket = searchParams.get('deliveryBucket')
+    const mileageBucket = searchParams.get('mileageBucket')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
 
     // Build where clause
     const where: any = {
       organizationId: user.organizationId,
+    }
+
+    // Filter by delivery or mileage bucket (requires computing metrics)
+    if (deliveryBucket && DELIVERY_BUCKETS[deliveryBucket]) {
+      const [completedTrips] = await Promise.all([
+        prisma.trip.findMany({
+          where: {
+            truck: { organizationId: user.organizationId },
+            status: 'COMPLETED',
+            actualEnd: { not: null },
+          },
+          select: { truckId: true },
+        }),
+      ])
+      const countByTruck: Record<string, number> = {}
+      for (const t of completedTrips) {
+        countByTruck[t.truckId] = (countByTruck[t.truckId] ?? 0) + 1
+      }
+      const bucket = DELIVERY_BUCKETS[deliveryBucket]
+      let truckIds: string[]
+      if (bucket.min === 0 && bucket.max === 0) {
+        const allTrucks = await prisma.truck.findMany({
+          where: { organizationId: user.organizationId },
+          select: { id: true },
+        })
+        const withDeliveries = new Set(Object.keys(countByTruck))
+        truckIds = allTrucks.filter((t) => !withDeliveries.has(t.id)).map((t) => t.id)
+      } else {
+        truckIds = Object.entries(countByTruck)
+          .filter(([, c]) => c >= bucket.min && c <= bucket.max)
+          .map(([id]) => id)
+      }
+      if (truckIds.length === 0) {
+        return NextResponse.json(createPaginatedResult([], 0, { page, limit }))
+      }
+      where.id = where.id ? { in: truckIds, ...where.id } : { in: truckIds }
+    }
+
+    if (mileageBucket && MILEAGE_BUCKETS[mileageBucket]) {
+      const fuelLogs = await prisma.fuelLog.findMany({
+        where: { truck: { organizationId: user.organizationId } },
+        select: { truckId: true, odometer: true, fueledAt: true },
+        orderBy: { fueledAt: 'asc' },
+      })
+      const logsByTruck = fuelLogs.reduce<Record<string, { odometer: number }[]>>((acc, log) => {
+        if (!acc[log.truckId]) acc[log.truckId] = []
+        acc[log.truckId].push({ odometer: log.odometer })
+        return acc
+      }, {})
+      const bucket = MILEAGE_BUCKETS[mileageBucket]
+      const allTrucks = await prisma.truck.findMany({
+        where: { organizationId: user.organizationId },
+        select: { id: true },
+      })
+      const truckIds = allTrucks.filter((t) => {
+        const logs = logsByTruck[t.id] || []
+        let miles = 0
+        for (let i = 1; i < logs.length; i++) {
+          const delta = logs[i].odometer - logs[i - 1].odometer
+          if (delta > 0) miles += delta
+        }
+        return miles >= bucket.min && miles <= bucket.max
+      }).map((t) => t.id)
+      if (truckIds.length === 0) {
+        return NextResponse.json(createPaginatedResult([], 0, { page, limit }))
+      }
+      where.id = where.id ? { in: truckIds.filter((id) => (where.id as { in: string[] }).in.includes(id)) } : { in: truckIds }
     }
 
     // RBAC: Drivers can only see their assigned truck
@@ -64,6 +151,7 @@ export const GET = withAuth(async (request) => {
       const statusMap: Record<string, TruckStatus | TruckStatus[]> = {
         'moving': TruckStatus.ACTIVE,
         'idle': TruckStatus.IDLE,
+        'maintenance': TruckStatus.MAINTENANCE,
         'alert': [TruckStatus.MAINTENANCE, TruckStatus.BLOCKED],
       }
       
@@ -78,6 +166,7 @@ export const GET = withAuth(async (request) => {
     // Search filter
     if (search) {
       where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
         { vin: { contains: search, mode: 'insensitive' } },
         { licensePlate: { contains: search, mode: 'insensitive' } },
         { make: { contains: search, mode: 'insensitive' } },
@@ -134,18 +223,97 @@ export const GET = withAuth(async (request) => {
       prisma.truck.count({ where }),
     ])
 
+    // Fetch fuel logs for mileage (sum of odometer deltas between consecutive fills)
+    const truckIds = trucks.map((t) => t.id)
+    const fuelLogs = truckIds.length > 0
+      ? await prisma.fuelLog.findMany({
+          where: { truckId: { in: truckIds } },
+          select: { truckId: true, odometer: true, fueledAt: true, gallons: true },
+          orderBy: { fueledAt: 'asc' },
+        })
+      : []
+
+    const logsByTruck = fuelLogs.reduce<Record<string, { odometer: number; fueledAt: Date; gallons: number }[]>>((acc, log) => {
+      if (!acc[log.truckId]) acc[log.truckId] = []
+      acc[log.truckId].push({ odometer: log.odometer, fueledAt: log.fueledAt, gallons: log.gallons })
+      return acc
+    }, {})
+
+    const mileageByTruck: Record<string, number> = {}
+    const lastFuelByTruck: Record<string, { gallons: number; fueledAt: Date; odometer: number }> = {}
+    const mpgByTruck: Record<string, number> = {}
+    const milesPerDayByTruck: Record<string, number> = {}
+    const now = Date.now()
+
+    for (const tid of truckIds) {
+      const logs = (logsByTruck[tid] || []).sort((a, b) => a.fueledAt.getTime() - b.fueledAt.getTime())
+      let totalMiles = 0
+      let totalGallons = 0
+      for (let i = 1; i < logs.length; i++) {
+        const delta = logs[i].odometer - logs[i - 1].odometer
+        if (delta > 0) {
+          totalMiles += delta
+          totalGallons += logs[i].gallons
+        }
+      }
+      mileageByTruck[tid] = totalMiles
+      mpgByTruck[tid] = totalGallons > 0 ? totalMiles / totalGallons : 6
+      if (logs.length >= 2) {
+        const prev = logs[logs.length - 2]
+        const last = logs[logs.length - 1]
+        const segmentMiles = Math.max(0, last.odometer - prev.odometer)
+        const segmentGallons = last.gallons
+        const daysBetween = Math.max(0.1, (last.fueledAt.getTime() - prev.fueledAt.getTime()) / 86400000)
+        mpgByTruck[tid] = segmentGallons > 0 ? segmentMiles / segmentGallons : mpgByTruck[tid]
+        milesPerDayByTruck[tid] = segmentMiles / daysBetween
+      } else {
+        milesPerDayByTruck[tid] = 200
+      }
+      if (logs.length > 0) {
+        const last = logs[logs.length - 1]
+        lastFuelByTruck[tid] = { gallons: last.gallons, fueledAt: last.fueledAt, odometer: last.odometer }
+      }
+    }
+
+    // Fuel %: start from last fill level, subtract consumption from odometer-derived miles since then
+    const fuelLevelByTruck: Record<string, number> = {}
+    for (const tid of truckIds) {
+      const truck = trucks.find((t) => t.id === tid)
+      const last = lastFuelByTruck[tid]
+      const capacity = truck?.fuelTankCapacityGallons
+      if (!last || !capacity || capacity <= 0) {
+        fuelLevelByTruck[tid] = 0
+        continue
+      }
+      const pctAtFill = Math.min(100, (last.gallons / capacity) * 100)
+      const gallonsAtFill = (pctAtFill / 100) * capacity
+      const daysSinceFill = (now - last.fueledAt.getTime()) / 86400000
+      const milesSinceFill = daysSinceFill * (milesPerDayByTruck[tid] ?? 200)
+      const mpg = mpgByTruck[tid] ?? 6
+      const gallonsBurned = milesSinceFill / mpg
+      const gallonsNow = Math.max(0, gallonsAtFill - gallonsBurned)
+      const pct = Math.round((gallonsNow / capacity) * 100)
+      fuelLevelByTruck[tid] = Math.min(100, Math.max(0, pct))
+    }
+
     // Calculate idle time for idle trucks
     const trucksWithIdleTime = trucks.map((truck) => {
       let idleMinutes = null
-      
+
       if (truck.truckStatus && truck.status === TruckStatus.IDLE) {
         const idleMs = Date.now() - truck.truckStatus.lastPingAt.getTime()
         idleMinutes = Math.floor(idleMs / 60000)
       }
 
+      const fuelLevel = fuelLevelByTruck[truck.id] ?? 0
+
       return {
         ...truck,
+        truckStatus: truck.truckStatus
+          ? { ...truck.truckStatus, fuelLevel }
+          : { latitude: 0, longitude: 0, speed: 0, heading: 0, fuelLevel, ignitionOn: false, lastPingAt: undefined },
         idleMinutes,
+        mileage: mileageByTruck[truck.id] ?? 0,
       }
     })
 
@@ -180,7 +348,7 @@ export const POST = withRole(UserRole.OWNER)(async (request) => {
     const body = await request.json()
 
     // Validate required fields
-    const { vin, licensePlate, make, model, year } = body
+    const { name, vin, licensePlate, make, model, year, fuelTankCapacityGallons, initialFuelLevel, latitude, longitude } = body
     
     if (!vin || !licensePlate || !make || !model || !year) {
       return NextResponse.json(
@@ -213,16 +381,33 @@ export const POST = withRole(UserRole.OWNER)(async (request) => {
       )
     }
 
+    // Validate optional fuel fields
+    const tankCapacity = fuelTankCapacityGallons != null && fuelTankCapacityGallons !== ''
+      ? parseInt(String(fuelTankCapacityGallons), 10)
+      : null
+    const fuelLevel = initialFuelLevel != null && initialFuelLevel !== ''
+      ? Math.max(0, Math.min(100, parseInt(String(initialFuelLevel), 10)))
+      : null
+
+    if (tankCapacity != null && (isNaN(tankCapacity) || tankCapacity < 0)) {
+      return NextResponse.json(
+        { error: 'Fuel tank capacity must be a positive number', code: 'VALIDATION_ERROR' },
+        { status: 400 }
+      )
+    }
+
     // Create truck
     const truck = await prisma.truck.create({
       data: {
         organizationId: user.organizationId,
+        name: name || null,
         vin,
         licensePlate,
         make,
         model,
         year,
         status: TruckStatus.ACTIVE,
+        fuelTankCapacityGallons: tankCapacity ?? undefined,
       },
       include: {
         currentDriver: {
@@ -234,6 +419,33 @@ export const POST = withRole(UserRole.OWNER)(async (request) => {
         },
       },
     })
+
+    // If initial fuel level or location provided, create/update TruckStatusRecord
+    const hasLocation = latitude != null && longitude != null && latitude !== '' && longitude !== ''
+    const lat = hasLocation ? parseFloat(String(latitude)) : 0
+    const lng = hasLocation ? parseFloat(String(longitude)) : 0
+    const validLocation = hasLocation && !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+
+    if (fuelLevel != null && !isNaN(fuelLevel) || validLocation) {
+      await prisma.truckStatusRecord.upsert({
+        where: { truckId: truck.id },
+        create: {
+          truckId: truck.id,
+          latitude: validLocation ? lat : 0,
+          longitude: validLocation ? lng : 0,
+          speed: 0,
+          heading: 0,
+          fuelLevel: fuelLevel ?? null,
+          ignitionOn: false,
+          lastPingAt: new Date(),
+        },
+        update: {
+          ...(validLocation && { latitude: lat, longitude: lng }),
+          ...(fuelLevel != null && !isNaN(fuelLevel) && { fuelLevel }),
+          lastPingAt: new Date(),
+        },
+      })
+    }
 
     return NextResponse.json(truck, { status: 201 })
   } catch (error) {

@@ -14,9 +14,9 @@ import { handlePrismaError } from '@/lib/db'
 import { UserRole, TripStatus, DriverStatus } from '@prisma/client'
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 /**
@@ -31,7 +31,7 @@ interface RouteParams {
 export const GET = withAuth(async (request: NextRequest, { params }: RouteParams) => {
   try {
     const { user } = request
-    const { id } = params
+    const { id } = await params
 
     // Fetch trip with related data
     const trip = await prisma.trip.findUnique({
@@ -58,6 +58,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
             status: true,
           },
         },
+        stops: { orderBy: { sequence: 'asc' } },
         deliveryProofs: {
           include: {
             media: {
@@ -106,7 +107,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
 
     return NextResponse.json(trip)
   } catch (error) {
-    console.error(`GET /api/trips/${params?.id} error:`, error)
+    console.error(`GET /api/trips/${id} error:`, error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },
@@ -132,7 +133,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
 export const PATCH = withAuth(async (request: NextRequest, { params }: RouteParams) => {
   try {
     const { user } = request
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const { status, deliveryProofId, notes } = body
 
@@ -274,7 +275,7 @@ export const PATCH = withAuth(async (request: NextRequest, { params }: RoutePara
 
     return NextResponse.json(updatedTrip)
   } catch (error) {
-    console.error(`PATCH /api/trips/${params?.id} error:`, error)
+    console.error(`PATCH /api/trips/${id} error:`, error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },
@@ -293,7 +294,7 @@ export const DELETE = withRole(UserRole.OWNER, UserRole.MANAGER)(
   async (request: NextRequest, { params }: RouteParams) => {
     try {
       const { user } = request
-      const { id } = params
+      const { id } = await params
 
       // Fetch trip
       const trip = await prisma.trip.findUnique({
@@ -348,7 +349,7 @@ export const DELETE = withRole(UserRole.OWNER, UserRole.MANAGER)(
         message: 'Trip cancelled successfully',
       })
     } catch (error) {
-      console.error(`DELETE /api/trips/${params?.id} error:`, error)
+      console.error(`DELETE /api/trips/${id} error:`, error)
       const { code, message } = handlePrismaError(error)
       return NextResponse.json(
         { error: message, code },

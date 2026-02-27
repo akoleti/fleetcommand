@@ -13,9 +13,9 @@ import { handlePrismaError } from '@/lib/db'
 import { UserRole } from '@prisma/client'
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 /**
@@ -34,7 +34,7 @@ interface RouteParams {
 export const GET = withAuth(async (request: NextRequest, { params }: RouteParams) => {
   try {
     const { user } = request
-    const { id } = params
+    const { id } = await params
 
     // Fetch driver
     const driver = await prisma.driver.findUnique({
@@ -138,7 +138,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
       daysUntilLicenseExpiry: daysUntilExpiry,
     })
   } catch (error) {
-    console.error(`GET /api/drivers/${params?.id} error:`, error)
+    console.error(`GET /api/drivers/${id} error:`, error)
     const { code, message } = handlePrismaError(error)
     return NextResponse.json(
       { error: message, code },
@@ -159,7 +159,7 @@ export const PATCH = withRole(UserRole.OWNER, UserRole.MANAGER)(
   async (request: NextRequest, { params }: RouteParams) => {
     try {
       const { user } = request
-      const { id } = params
+      const { id } = await params
       const body = await request.json()
 
       // Check driver exists and belongs to user's org
@@ -222,7 +222,7 @@ export const PATCH = withRole(UserRole.OWNER, UserRole.MANAGER)(
 
       return NextResponse.json(updatedDriver)
     } catch (error) {
-      console.error(`PATCH /api/drivers/${params?.id} error:`, error)
+      console.error(`PATCH /api/drivers/${id} error:`, error)
       const { code, message } = handlePrismaError(error)
       return NextResponse.json(
         { error: message, code },

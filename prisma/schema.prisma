@@ -114,6 +114,7 @@ model Organization {
   drivers            Driver[]
   alerts             Alert[]
   insurancePolicies  InsurancePolicy[]
+  fuelStations       FuelStation[]
 
   @@map("organizations")
 }
@@ -134,6 +135,10 @@ model User {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   alerts       Alert[]      @relation("AlertUser")
   refreshTokens RefreshToken[]
+  createdTrips       Trip[]            @relation("TripCreator")
+  createdMaintenance Maintenance[]     @relation("MaintenanceCreator")
+  createdFuelLogs    FuelLog[]         @relation("FuelLogCreator")
+  createdPolicies    InsurancePolicy[] @relation("PolicyCreator")
 
   @@index([organizationId])
   @@index([email])
@@ -159,17 +164,19 @@ model RefreshToken {
 // ============================================================================
 
 model Truck {
-  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId  String      @db.Uuid
-  vin             String      @unique
-  licensePlate    String
-  make            String
-  model           String
-  year            Int
-  status          TruckStatus @default(ACTIVE)
-  currentDriverId String?     @db.Uuid
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                    String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String      @db.Uuid
+  name                  String?
+  vin                   String      @unique
+  licensePlate          String
+  make                  String
+  model                 String
+  year                  Int
+  status                TruckStatus @default(ACTIVE)
+  currentDriverId       String?     @db.Uuid
+  fuelTankCapacityGallons Int?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
 
   organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   currentDriver     Driver?            @relation("CurrentDriver", fields: [currentDriverId], references: [id])
@@ -199,7 +206,8 @@ model Driver {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  assignedTrucks Truck[]  @relation("CurrentDriver")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedTrucks Truck[]      @relation("CurrentDriver")
   trips          Trip[]
 
   @@index([organizationId])
@@ -255,34 +263,58 @@ model GpsLocation {
 // TRIPS & DELIVERY
 // ============================================================================
 
+enum StopType {
+  PICKUP
+  DROPOFF
+}
+
 model Trip {
   id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   truckId         String     @db.Uuid
   driverId        String     @db.Uuid
   originAddress   String
-  originLat       Float
-  originLng       Float
+  originLat       Float?
+  originLng       Float?
   destinationAddress String
-  destinationLat  Float
-  destinationLng  Float
+  destinationLat  Float?
+  destinationLng  Float?
   scheduledStart  DateTime
   scheduledEnd    DateTime?
   actualStart     DateTime?
   actualEnd       DateTime?
   status          TripStatus @default(SCHEDULED)
   notes           String?
+  createdById     String?    @db.Uuid
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
   truck          Truck          @relation(fields: [truckId], references: [id], onDelete: Cascade)
   driver         Driver         @relation(fields: [driverId], references: [id])
+  createdBy      User?          @relation("TripCreator", fields: [createdById], references: [id])
   deliveryProofs DeliveryProof[]
+  stops          TripStop[]
 
   @@index([truckId])
   @@index([driverId])
   @@index([status])
   @@index([scheduledStart])
   @@map("trips")
+}
+
+model TripStop {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tripId    String   @db.Uuid
+  sequence  Int
+  type      StopType
+  address   String
+  lat       Float?
+  lng       Float?
+  notes     String?
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("trip_stops")
 }
 
 model DeliveryProof {
@@ -308,8 +340,9 @@ model DeliveryMedia {
   id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   proofId   String            @db.Uuid
   type      DeliveryMediaType
-  s3Key     String
-  s3Bucket  String
+  s3Key     String?           // S3 key or UploadThing key (legacy)
+  s3Bucket  String?           // S3 bucket or 'uploadthing' (legacy)
+  fileUrl   String?           // UploadThing URL (primary for new uploads)
   mimeType  String?
   fileSize  Int?
   createdAt DateTime          @default(now())
@@ -371,11 +404,16 @@ model Maintenance {
   odometer        Int?
   notes           String?
   insuranceClaimId String?          @db.Uuid
+  maintenanceProofId String?        @db.Uuid
+  createdById     String?           @db.Uuid
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  truck          Truck           @relation(fields: [truckId], references: [id], onDelete: Cascade)
-  insuranceClaim InsuranceClaim? @relation(fields: [insuranceClaimId], references: [id])
+  truck          Truck             @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  insuranceClaim InsuranceClaim?   @relation(fields: [insuranceClaimId], references: [id])
+  createdBy      User?             @relation("MaintenanceCreator", fields: [createdById], references: [id])
+  proofs         MaintenanceProof[]
+  completionProof MaintenanceProof? @relation("MaintenanceCompletionProof", fields: [maintenanceProofId], references: [id])
 
   @@index([truckId])
   @@index([type])
@@ -385,28 +423,77 @@ model Maintenance {
   @@map("maintenance")
 }
 
+model MaintenanceProof {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  maintenanceId String @db.Uuid
+  signedBy   String   // Vendor or person who completed
+  notes      String?
+  capturedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  maintenance Maintenance         @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+  media       MaintenanceMedia[]
+  maintenanceAsCompletion Maintenance[] @relation("MaintenanceCompletionProof")
+
+  @@index([maintenanceId])
+  @@map("maintenance_proofs")
+}
+
+model MaintenanceMedia {
+  id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proofId   String            @db.Uuid
+  type      DeliveryMediaType // SIGNATURE, PHOTO, DOCUMENT
+  s3Key     String?
+  s3Bucket  String?
+  fileUrl   String?
+  mimeType  String?
+  fileSize  Int?
+  createdAt DateTime          @default(now())
+
+  proof MaintenanceProof @relation(fields: [proofId], references: [id], onDelete: Cascade)
+
+  @@index([proofId])
+  @@map("maintenance_media")
+}
+
 // ============================================================================
 // FUEL
 // ============================================================================
 
 model FuelLog {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  truckId     String   @db.Uuid
-  gallons     Float
-  pricePerGallon Float
-  totalCost   Float
-  odometer    Int
-  station     String?
-  latitude    Float?
-  longitude   Float?
-  fueledAt    DateTime @default(now())
-  createdAt   DateTime @default(now())
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  truckId            String   @db.Uuid
+  gallons            Float
+  pricePerGallon    Float
+  totalCost          Float
+  odometer          Int
+  station           String?
+  latitude          Float?
+  longitude         Float?
+  fueledAt          DateTime @default(now())
+  createdById       String?  @db.Uuid
+  createdAt         DateTime @default(now())
 
-  truck Truck @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  truck     Truck @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("FuelLogCreator", fields: [createdById], references: [id])
 
   @@index([truckId])
   @@index([fueledAt])
   @@map("fuel_logs")
+}
+
+model FuelStation {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("fuel_stations")
 }
 
 // ============================================================================
@@ -428,11 +515,13 @@ model InsurancePolicy {
   documentS3Key  String?
   notes          String?
   isActive       Boolean   @default(true)
+  createdById    String?   @db.Uuid
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   truck        Truck            @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  createdBy    User?            @relation("PolicyCreator", fields: [createdById], references: [id])
   claims       InsuranceClaim[]
 
   @@index([organizationId])
