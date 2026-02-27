@@ -1,0 +1,14 @@
+# Playwright test artifacts
+test-results/
+playwright-report/
+.auth/
+
+# Screenshots and videos
+*.png
+*.webm
+*.mp4
+
+# Local test files
+fixtures/test-image.jpg
+fixtures/*.jpg
+fixtures/*.png
