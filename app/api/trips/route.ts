@@ -298,7 +298,7 @@ export const POST = withRole(UserRole.OWNER, UserRole.MANAGER)(async (request) =
     const [truck, driver] = await Promise.all([
       prisma.truck.findUnique({
         where: { id: truckId },
-        select: { organizationId: true, status: true },
+        select: { organizationId: true, status: true, currentDriverId: true },
       }),
       prisma.driver.findUnique({
         where: { id: driverId },
@@ -358,8 +358,9 @@ export const POST = withRole(UserRole.OWNER, UserRole.MANAGER)(async (request) =
       )
     }
 
-    // Validate driver is AVAILABLE
-    if (driver.status !== DriverStatus.AVAILABLE) {
+    // Validate driver is AVAILABLE, or is the truck's assigned driver (can schedule back-to-back trips)
+    const isTruckAssignedDriver = truck.currentDriverId === driverId
+    if (driver.status !== DriverStatus.AVAILABLE && !isTruckAssignedDriver) {
       return NextResponse.json(
         { 
           error: `Cannot schedule trip: driver status is ${driver.status}`,
