@@ -57,6 +57,19 @@ const statusConfig: Record<string, { bg: string; text: string; dot: string }> = 
 
 const MAKES = ['Freightliner', 'Peterbilt', 'Kenworth', 'Volvo', 'Mack', 'International'] as const
 
+type AddFormState = {
+  name: string
+  vin: string
+  licensePlate: string
+  make: (typeof MAKES)[number]
+  model: string
+  year: number
+  fuelTankCapacityGallons: string
+  initialFuelLevel: string
+  latitude: string
+  longitude: string
+}
+
 const VALID_STATUS_FILTERS = ['all', 'moving', 'idle', 'maintenance', 'alert']
 
 export default function TrucksPage() {
@@ -74,7 +87,7 @@ export default function TrucksPage() {
   const [totalPages, setTotalPages] = useState(1)
 
   const [showAddModal, setShowAddModal] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear(), fuelTankCapacityGallons: '', initialFuelLevel: '', latitude: '', longitude: '' })
+  const [addForm, setAddForm] = useState<AddFormState>({ name: '', vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear(), fuelTankCapacityGallons: '', initialFuelLevel: '', latitude: '', longitude: '' })
   const [addError, setAddError] = useState<string | null>(null)
   const [addSubmitting, setAddSubmitting] = useState(false)
 
@@ -552,7 +565,7 @@ export default function TrucksPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Make</label>
                   <select
                     value={addForm.make}
-                    onChange={(e) => setAddForm({ ...addForm, make: e.target.value })}
+                    onChange={(e) => setAddForm({ ...addForm, make: e.target.value as (typeof MAKES)[number] })}
                     className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
                   >
                     {MAKES.map((m) => (
