@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { withAuth } from '@/middleware/auth'
+import { NextResponse } from 'next/server'
+import { withAuth, AuthenticatedRequest } from '@/middleware/auth'
 import { prisma, handlePrismaError } from '@/lib/db'
 
 interface RouteParams {
@@ -9,7 +9,7 @@ interface RouteParams {
 /**
  * GET /api/alerts/[id]
  */
-export const GET = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id } = await params
@@ -49,7 +49,7 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
  *
  * Acknowledge an alert
  */
-export const PATCH = withAuth(async (request: NextRequest, { params }: RouteParams) => {
+export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
   try {
     const { user } = request
     const { id } = await params
