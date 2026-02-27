@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { litersToGallons } from '@/lib/format'
 
 interface Truck {
   id: string
@@ -158,7 +159,7 @@ export default function TrucksPage() {
         body: JSON.stringify({
           ...addForm,
           name: addForm.name.trim() || null,
-          fuelTankCapacityGallons: addForm.fuelTankCapacityGallons ? parseInt(addForm.fuelTankCapacityGallons, 10) : null,
+          fuelTankCapacityGallons: addForm.fuelTankCapacityGallons ? Math.round(litersToGallons(parseFloat(addForm.fuelTankCapacityGallons))) : null,
           initialFuelLevel: addForm.initialFuelLevel ? parseInt(addForm.initialFuelLevel, 10) : null,
           latitude: addForm.latitude ? parseFloat(addForm.latitude) : null,
           longitude: addForm.longitude ? parseFloat(addForm.longitude) : null,
@@ -393,19 +394,15 @@ export default function TrucksPage() {
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm">
-                      {truck.truckStatus?.fuelLevel != null ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${getFuelColor(truck.truckStatus.fuelLevel)}`}
-                              style={{ width: `${truck.truckStatus.fuelLevel}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-slate-600 tabular-nums">{truck.truckStatus.fuelLevel}%</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${getFuelColor(truck.truckStatus?.fuelLevel ?? 0)}`}
+                            style={{ width: `${Math.min(100, Math.max(0, truck.truckStatus?.fuelLevel ?? 0))}%` }}
+                          />
                         </div>
-                      ) : (
-                        <span className="text-slate-400">-</span>
-                      )}
+                        <span className="text-xs text-slate-600 tabular-nums">{Math.round(truck.truckStatus?.fuelLevel ?? 0)}%</span>
+                      </div>
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 tabular-nums">
                       {truck.mileage != null
@@ -582,14 +579,14 @@ export default function TrucksPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Fuel Tank Capacity <span className="text-slate-400 font-normal">(gal, optional)</span></label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Fuel Tank Capacity <span className="text-slate-400 font-normal">(L, optional)</span></label>
                   <input
                     type="number"
                     min="0"
                     step="1"
                     value={addForm.fuelTankCapacityGallons}
                     onChange={(e) => setAddForm({ ...addForm, fuelTankCapacityGallons: e.target.value })}
-                    placeholder="e.g. 150"
+                    placeholder="e.g. 568"
                     className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
                   />
                 </div>

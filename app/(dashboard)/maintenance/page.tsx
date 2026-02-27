@@ -61,7 +61,7 @@ const formatDate = (dateStr: string) =>
   new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 const formatCurrency = (amount: number | null) =>
-  amount != null ? `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '-'
+  amount != null ? `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'
 
 export default function MaintenancePage() {
   const [trucks, setTrucks] = useState<Truck[]>([])

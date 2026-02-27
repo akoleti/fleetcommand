@@ -402,18 +402,18 @@ model Maintenance {
 // ============================================================================
 
 model FuelLog {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  truckId     String   @db.Uuid
-  gallons     Float
-  pricePerGallon Float
-  totalCost   Float
-  odometer    Int
-  station     String?
-  latitude    Float?
-  longitude   Float?
-  fueledAt    DateTime @default(now())
-  createdById String?  @db.Uuid
-  createdAt   DateTime @default(now())
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  truckId            String   @db.Uuid
+  gallons            Float
+  pricePerGallon    Float
+  totalCost          Float
+  odometer          Int
+  station           String?
+  latitude          Float?
+  longitude         Float?
+  fueledAt          DateTime @default(now())
+  createdById       String?  @db.Uuid
+  createdAt         DateTime @default(now())
 
   truck     Truck @relation(fields: [truckId], references: [id], onDelete: Cascade)
   createdBy User? @relation("FuelLogCreator", fields: [createdById], references: [id])

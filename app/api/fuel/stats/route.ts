@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { withAuth } from '@/middleware/auth'
 import { prisma, handlePrismaError } from '@/lib/db'
+import { gallonsToLiters } from '@/lib/format'
 
 export const GET = withAuth(async (request) => {
   try {
@@ -64,6 +65,11 @@ export const GET = withAuth(async (request) => {
       `,
     ])
 
+    const totalGallons = aggregation._sum.gallons ?? 0
+    const totalCost = aggregation._sum.totalCost ?? 0
+    const totalLiters = gallonsToLiters(totalGallons)
+    const avgPricePerLiter = totalLiters > 0 ? totalCost / totalLiters : 0
+
     const topStations = stationData.map((s) => ({
       station: s.station,
       totalGallons: s._sum.gallons ?? 0,
@@ -71,11 +77,10 @@ export const GET = withAuth(async (request) => {
     }))
 
     return NextResponse.json({
-      totalGallons: aggregation._sum.gallons ?? 0,
-      totalCost: aggregation._sum.totalCost ?? 0,
-      avgPricePerGallon: aggregation._avg.pricePerGallon
-        ? Math.round(aggregation._avg.pricePerGallon * 1000) / 1000
-        : 0,
+      totalGallons,
+      totalCost,
+      totalLiters,
+      avgPricePerLiter: Math.round(avgPricePerLiter * 1000) / 1000,
       topStations,
       monthlyTrend: monthlyData,
     })

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { gallonsToLiters } from '@/lib/format'
 import { useRouter } from 'next/navigation'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, LabelList } from 'recharts'
 
@@ -255,10 +256,10 @@ export default function DashboardPage() {
             </div>
           </div>
           <p className="mt-3 text-3xl font-bold text-slate-900 tabular-nums">
-            ${(stats?.fuel.totalCostThisMonth ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ₹{(stats?.fuel.totalCostThisMonth ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           <div className="mt-2 text-xs text-slate-500">
-            {(stats?.fuel.totalGallonsThisMonth ?? 0).toLocaleString('en-US', { maximumFractionDigits: 1 })} gal
+            {(gallonsToLiters(stats?.fuel.totalGallonsThisMonth ?? 0)).toLocaleString('en-US', { maximumFractionDigits: 1 })} L
           </div>
         </Link>
       </div>

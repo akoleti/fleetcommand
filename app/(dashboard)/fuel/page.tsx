@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface Truck {
   id: string
@@ -32,7 +33,9 @@ interface FuelLog {
 interface FuelStats {
   totalGallons: number
   totalCost: number
-  avgPricePerGallon: number
+  totalLiters?: number
+  avgPricePerLiter?: number
+  avgPricePerGallon?: number
   topStations?: { station: string; totalGallons: number; totalCost: number }[]
   monthlyTrend?: { month: string; gallons: number; cost: number }[]
 }
@@ -57,8 +60,10 @@ const getHeaders = () => {
   return { Authorization: `Bearer ${token}` }
 }
 
+import { gallonsToLiters, GALLONS_TO_LITERS } from '@/lib/format'
+
 const formatCurrency = (amount: number) =>
-  `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+  `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 
 const formatDate = (dateStr: string | undefined | null) => {
   if (!dateStr) return '—'
@@ -68,6 +73,7 @@ const formatDate = (dateStr: string | undefined | null) => {
 }
 
 export default function FuelPage() {
+  const router = useRouter()
   const [trucks, setTrucks] = useState<Truck[]>([])
   const [selectedTruckId, setSelectedTruckId] = useState<string>('')
   const [logs, setLogs] = useState<FuelLog[]>([])
@@ -184,14 +190,20 @@ export default function FuelPage() {
   }
 
   const fetchAllLogs = async () => {
+    const token = localStorage.getItem('accessToken')
+    if (!token) return
     try {
       setLoading(true)
-      const res = await fetch(`/api/fuel?limit=100`, { headers: getHeaders() })
-      if (!res.ok) throw new Error('Failed to fetch fuel logs')
-      const data: PaginatedResponse<FuelLog> = await res.json()
-      setAllLogs(data.data)
-      setLogs([])
       setError(null)
+      const res = await fetch(`/api/fuel?limit=100`, { headers: getHeaders() })
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 401) {
+        router.replace('/login')
+        return
+      }
+      if (!res.ok) throw new Error(data.error || `Failed to fetch fuel logs (${res.status})`)
+      setAllLogs((data.data ?? data) || [])
+      setLogs([])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -200,15 +212,21 @@ export default function FuelPage() {
   }
 
   const fetchTruckLogs = async () => {
+    const token = localStorage.getItem('accessToken')
+    if (!token) return
     try {
       setLoading(true)
+      setError(null)
       const params = new URLSearchParams({ truckId: selectedTruckId, page: page.toString(), limit: '50' })
       const res = await fetch(`/api/fuel?${params}`, { headers: getHeaders() })
-      if (!res.ok) throw new Error('Failed to fetch fuel logs')
-      const data: PaginatedResponse<FuelLog> = await res.json()
-      setLogs(data.data)
-      setTotalPages(data.pagination.totalPages)
-      setError(null)
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 401) {
+        router.replace('/login')
+        return
+      }
+      if (!res.ok) throw new Error(data.error || `Failed to fetch fuel logs (${res.status})`)
+      setLogs((data.data ?? data) || [])
+      setTotalPages(data.pagination?.totalPages ?? 1)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -252,14 +270,14 @@ export default function FuelPage() {
 
   const statCards = selectedTruckId && truckStats
     ? [
-        { label: 'Total Gallons', value: truckStats.totalGallons.toLocaleString('en-US', { maximumFractionDigits: 1 }), iconBg: 'bg-brand-50', iconColor: 'text-brand-600' },
+        { label: 'Total Liters', value: gallonsToLiters(truckStats.totalGallons).toLocaleString('en-US', { maximumFractionDigits: 1 }), iconBg: 'bg-brand-50', iconColor: 'text-brand-600' },
         { label: 'Total Cost', value: formatCurrency(truckStats.totalCost), iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
-        { label: 'Avg Price/Gal', value: formatCurrency(truckStats.avgPrice), iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },
+        { label: 'Avg ₹/L', value: formatCurrency(truckStats.totalGallons > 0 ? truckStats.totalCost / gallonsToLiters(truckStats.totalGallons) : 0), iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },
       ]
     : [
-        { label: 'Total Gallons', value: stats ? stats.totalGallons.toLocaleString('en-US', { maximumFractionDigits: 1 }) : '-', iconBg: 'bg-brand-50', iconColor: 'text-brand-600' },
+        { label: 'Total Liters', value: stats ? gallonsToLiters(stats.totalGallons).toLocaleString('en-US', { maximumFractionDigits: 1 }) : '-', iconBg: 'bg-brand-50', iconColor: 'text-brand-600' },
         { label: 'Total Cost', value: stats ? formatCurrency(stats.totalCost) : '-', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
-        { label: 'Avg Price/Gal', value: stats ? formatCurrency(stats.avgPricePerGallon) : '-', iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },
+        { label: 'Avg ₹/L', value: stats ? formatCurrency(stats.avgPricePerLiter ?? (stats.totalGallons > 0 ? (stats.totalCost / gallonsToLiters(stats.totalGallons)) : 0)) : '-', iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },
       ]
 
   const iconSvgs = [
@@ -394,11 +412,19 @@ export default function FuelPage() {
       </div>
 
       {error && (
-        <div className="mt-6 flex items-start gap-3 rounded-xl bg-danger-50 border border-red-200 px-4 py-3">
-          <svg className="w-5 h-5 text-danger-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
-          </svg>
-          <p className="text-sm text-danger-700">{error}</p>
+        <div className="mt-6 flex items-start justify-between gap-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-red-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+            </svg>
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+          <button
+            onClick={() => { setError(null); selectedTruckId ? fetchTruckLogs() : fetchAllLogs() }}
+            className="shrink-0 text-sm font-medium text-red-700 hover:text-red-800 underline"
+          >
+            Retry
+          </button>
         </div>
       )}
 
@@ -426,9 +452,9 @@ export default function FuelPage() {
                 <tr className="bg-slate-50/80">
                   <th scope="col" className="py-3 pl-5 pr-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Truck</th>
                   <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Fill-ups</th>
-                  <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Total Gallons</th>
+                  <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Total Liters</th>
                   <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Total Cost</th>
-                  <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Avg $/Gal</th>
+                  <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Avg ₹/L</th>
                   <th scope="col" className="relative py-3 pl-3 pr-5"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -440,9 +466,9 @@ export default function FuelPage() {
                       <div className="text-xs text-slate-500 mt-0.5">{row.truck.licensePlate}</div>
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 tabular-nums">{row.count}</td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 tabular-nums">{row.gallons.toLocaleString('en-US', { maximumFractionDigits: 1 })}</td>
+                    <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 tabular-nums">{gallonsToLiters(row.gallons).toLocaleString('en-US', { maximumFractionDigits: 1 })}</td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-slate-900 tabular-nums">{formatCurrency(row.cost)}</td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 tabular-nums">{row.gallons > 0 ? formatCurrency(row.cost / row.gallons) : '-'}</td>
+                    <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 tabular-nums">{row.gallons > 0 ? formatCurrency(row.cost / gallonsToLiters(row.gallons)) : '-'}</td>
                     <td className="whitespace-nowrap py-4 pl-3 pr-5 text-right">
                       <button
                         onClick={() => handleTruckChange(row.truck.id)}
@@ -480,8 +506,8 @@ export default function FuelPage() {
                 <tr className="bg-slate-50/80">
                   <th scope="col" className="py-3 pl-5 pr-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Date</th>
                   <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Station</th>
-                  <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Gallons</th>
-                  <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Price/Gal</th>
+                  <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Liters</th>
+                  <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Price/L</th>
                   <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Total Cost</th>
                   <th scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Odometer</th>
                   <th scope="col" className="relative py-3 pl-3 pr-5"><span className="sr-only">Actions</span></th>
@@ -497,10 +523,10 @@ export default function FuelPage() {
                       {log.station || <span className="text-slate-400">—</span>}
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 tabular-nums">
-                      {log.gallons.toFixed(1)}
+                      {gallonsToLiters(log.gallons).toFixed(1)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 tabular-nums">
-                      {formatCurrency(log.pricePerGallon)}
+                      {formatCurrency(log.pricePerGallon / GALLONS_TO_LITERS)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-slate-900 tabular-nums">
                       {formatCurrency(log.totalCost)}

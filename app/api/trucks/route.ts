@@ -228,26 +228,72 @@ export const GET = withAuth(async (request) => {
     const fuelLogs = truckIds.length > 0
       ? await prisma.fuelLog.findMany({
           where: { truckId: { in: truckIds } },
-          select: { truckId: true, odometer: true, fueledAt: true },
+          select: { truckId: true, odometer: true, fueledAt: true, gallons: true },
           orderBy: { fueledAt: 'asc' },
         })
       : []
 
-    const logsByTruck = fuelLogs.reduce<Record<string, { odometer: number; fueledAt: Date }[]>>((acc, log) => {
+    const logsByTruck = fuelLogs.reduce<Record<string, { odometer: number; fueledAt: Date; gallons: number }[]>>((acc, log) => {
       if (!acc[log.truckId]) acc[log.truckId] = []
-      acc[log.truckId].push({ odometer: log.odometer, fueledAt: log.fueledAt })
+      acc[log.truckId].push({ odometer: log.odometer, fueledAt: log.fueledAt, gallons: log.gallons })
       return acc
     }, {})
 
     const mileageByTruck: Record<string, number> = {}
+    const lastFuelByTruck: Record<string, { gallons: number; fueledAt: Date; odometer: number }> = {}
+    const mpgByTruck: Record<string, number> = {}
+    const milesPerDayByTruck: Record<string, number> = {}
+    const now = Date.now()
+
     for (const tid of truckIds) {
       const logs = (logsByTruck[tid] || []).sort((a, b) => a.fueledAt.getTime() - b.fueledAt.getTime())
-      let miles = 0
+      let totalMiles = 0
+      let totalGallons = 0
       for (let i = 1; i < logs.length; i++) {
         const delta = logs[i].odometer - logs[i - 1].odometer
-        if (delta > 0) miles += delta
+        if (delta > 0) {
+          totalMiles += delta
+          totalGallons += logs[i].gallons
+        }
       }
-      mileageByTruck[tid] = miles
+      mileageByTruck[tid] = totalMiles
+      mpgByTruck[tid] = totalGallons > 0 ? totalMiles / totalGallons : 6
+      if (logs.length >= 2) {
+        const prev = logs[logs.length - 2]
+        const last = logs[logs.length - 1]
+        const segmentMiles = Math.max(0, last.odometer - prev.odometer)
+        const segmentGallons = last.gallons
+        const daysBetween = Math.max(0.1, (last.fueledAt.getTime() - prev.fueledAt.getTime()) / 86400000)
+        mpgByTruck[tid] = segmentGallons > 0 ? segmentMiles / segmentGallons : mpgByTruck[tid]
+        milesPerDayByTruck[tid] = segmentMiles / daysBetween
+      } else {
+        milesPerDayByTruck[tid] = 200
+      }
+      if (logs.length > 0) {
+        const last = logs[logs.length - 1]
+        lastFuelByTruck[tid] = { gallons: last.gallons, fueledAt: last.fueledAt, odometer: last.odometer }
+      }
+    }
+
+    // Fuel %: start from last fill level, subtract consumption from odometer-derived miles since then
+    const fuelLevelByTruck: Record<string, number> = {}
+    for (const tid of truckIds) {
+      const truck = trucks.find((t) => t.id === tid)
+      const last = lastFuelByTruck[tid]
+      const capacity = truck?.fuelTankCapacityGallons
+      if (!last || !capacity || capacity <= 0) {
+        fuelLevelByTruck[tid] = 0
+        continue
+      }
+      const pctAtFill = Math.min(100, (last.gallons / capacity) * 100)
+      const gallonsAtFill = (pctAtFill / 100) * capacity
+      const daysSinceFill = (now - last.fueledAt.getTime()) / 86400000
+      const milesSinceFill = daysSinceFill * (milesPerDayByTruck[tid] ?? 200)
+      const mpg = mpgByTruck[tid] ?? 6
+      const gallonsBurned = milesSinceFill / mpg
+      const gallonsNow = Math.max(0, gallonsAtFill - gallonsBurned)
+      const pct = Math.round((gallonsNow / capacity) * 100)
+      fuelLevelByTruck[tid] = Math.min(100, Math.max(0, pct))
     }
 
     // Calculate idle time for idle trucks
@@ -259,8 +305,13 @@ export const GET = withAuth(async (request) => {
         idleMinutes = Math.floor(idleMs / 60000)
       }
 
+      const fuelLevel = fuelLevelByTruck[truck.id] ?? 0
+
       return {
         ...truck,
+        truckStatus: truck.truckStatus
+          ? { ...truck.truckStatus, fuelLevel }
+          : { latitude: 0, longitude: 0, speed: 0, heading: 0, fuelLevel, ignitionOn: false, lastPingAt: undefined },
         idleMinutes,
         mileage: mileageByTruck[truck.id] ?? 0,
       }

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { gallonsToLiters, GALLONS_TO_LITERS } from '@/lib/format'
 
 interface FuelLog {
   id: string
@@ -31,7 +32,7 @@ const getHeaders = () => {
 }
 
 const formatCurrency = (amount: number) =>
-  `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+  `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 
 const formatDate = (dateStr: string | undefined | null) => {
   if (!dateStr) return '—'
@@ -135,7 +136,7 @@ export default function FuelLogDetailPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
-              {log.gallons.toFixed(1)} gal @ {formatCurrency(log.pricePerGallon)}/gal
+              {gallonsToLiters(log.gallons).toFixed(1)} L @ {formatCurrency(log.pricePerGallon / GALLONS_TO_LITERS)}/L
             </h1>
             <div className="mt-1.5 flex items-center gap-2 text-sm text-slate-500">
               <span>{formatDateTime(log.fueledAt)}</span>
@@ -165,12 +166,12 @@ export default function FuelLogDetailPage() {
           </div>
           <dl className="px-6 py-4 space-y-3">
             <div className="flex items-center justify-between">
-              <dt className="text-sm text-slate-500">Gallons</dt>
-              <dd className="text-sm font-medium text-slate-900 tabular-nums">{log.gallons.toFixed(1)}</dd>
+              <dt className="text-sm text-slate-500">Liters</dt>
+              <dd className="text-sm font-medium text-slate-900 tabular-nums">{gallonsToLiters(log.gallons).toFixed(1)}</dd>
             </div>
             <div className="flex items-center justify-between">
-              <dt className="text-sm text-slate-500">Price per Gallon</dt>
-              <dd className="text-sm font-medium text-slate-900 tabular-nums">{formatCurrency(log.pricePerGallon)}</dd>
+              <dt className="text-sm text-slate-500">Price per Liter</dt>
+              <dd className="text-sm font-medium text-slate-900 tabular-nums">{formatCurrency(log.pricePerGallon / GALLONS_TO_LITERS)}</dd>
             </div>
             <div className="flex items-center justify-between">
               <dt className="text-sm text-slate-500">Total Cost</dt>

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { gallonsToLiters, litersToGallons, GALLONS_TO_LITERS } from '@/lib/format'
 
 interface Truck {
   id: string
@@ -216,7 +217,7 @@ export default function TruckDetailPage() {
 
   // Fuel modal
   const [fuelModalOpen, setFuelModalOpen] = useState(false)
-  const [fuelForm, setFuelForm] = useState({ gallons: '', pricePerGallon: '', odometer: '', station: '' })
+  const [fuelForm, setFuelForm] = useState({ liters: '', pricePerLiter: '', odometer: '', station: '' })
   const [fuelSubmitting, setFuelSubmitting] = useState(false)
   const [fuelModalError, setFuelModalError] = useState<string | null>(null)
   const [orgFuelStations, setOrgFuelStations] = useState<string[]>([])
@@ -471,7 +472,7 @@ export default function TruckDetailPage() {
 
   const openFuelModal = () => {
     setFuelModalError(null)
-    setFuelForm({ gallons: '', pricePerGallon: '', odometer: '', station: '' })
+    setFuelForm({ liters: '', pricePerLiter: '', odometer: '', station: '' })
     setFuelModalOpen(true)
     fetch('/api/fuel-stations', { headers: authHeaders() })
       .then((r) => r.ok ? r.json() : [])
@@ -489,8 +490,8 @@ export default function TruckDetailPage() {
         headers: authHeaders(),
         body: JSON.stringify({
           truckId,
-          gallons: parseFloat(fuelForm.gallons),
-          pricePerGallon: parseFloat(fuelForm.pricePerGallon),
+          gallons: litersToGallons(parseFloat(fuelForm.liters)),
+          pricePerGallon: parseFloat(fuelForm.pricePerLiter) * GALLONS_TO_LITERS,
           odometer: parseInt(fuelForm.odometer),
           station: fuelForm.station || null,
         }),
@@ -502,8 +503,8 @@ export default function TruckDetailPage() {
     finally { setFuelSubmitting(false) }
   }
 
-  const fuelTotalCost = fuelForm.gallons && fuelForm.pricePerGallon
-    ? (parseFloat(fuelForm.gallons) * parseFloat(fuelForm.pricePerGallon)).toFixed(2)
+  const fuelTotalCost = fuelForm.liters && fuelForm.pricePerLiter
+    ? (parseFloat(fuelForm.liters) * parseFloat(fuelForm.pricePerLiter)).toFixed(2)
     : null
 
   const openInsuranceModal = () => {
@@ -1044,7 +1045,7 @@ export default function TruckDetailPage() {
                           {new Date(rec.scheduledDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-900">
-                          {rec.cost != null ? `$${rec.cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : <span className="text-slate-400">&mdash;</span>}
+                          {rec.cost != null ? `₹${rec.cost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : <span className="text-slate-400">&mdash;</span>}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600">
                           {rec.vendor || <span className="text-slate-400">&mdash;</span>}
@@ -1080,21 +1081,21 @@ export default function TruckDetailPage() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider">Total Gallons</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">Total Liters</p>
                   <p className="mt-1 text-xl font-bold text-slate-900">
-                    {fuelLogs.reduce((s, f) => s + f.gallons, 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                    {gallonsToLiters(fuelLogs.reduce((s, f) => s + f.gallons, 0)).toLocaleString(undefined, { maximumFractionDigits: 1 })}
                   </p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3">
                   <p className="text-xs text-slate-500 uppercase tracking-wider">Total Cost</p>
                   <p className="mt-1 text-xl font-bold text-slate-900">
-                    ${fuelLogs.reduce((s, f) => s + f.totalCost, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₹{fuelLogs.reduce((s, f) => s + f.totalCost, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider">Avg Price/Gal</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">Avg ₹/L</p>
                   <p className="mt-1 text-xl font-bold text-slate-900">
-                    ${(fuelLogs.reduce((s, f) => s + f.totalCost, 0) / (fuelLogs.reduce((s, f) => s + f.gallons, 0) || 1)).toFixed(2)}
+                    ₹{(fuelLogs.reduce((s, f) => s + f.totalCost, 0) / (gallonsToLiters(fuelLogs.reduce((s, f) => s + f.gallons, 0)) || 1)).toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -1104,8 +1105,8 @@ export default function TruckDetailPage() {
                     <tr className="bg-slate-50/80">
                       <th className="py-3 pl-5 pr-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Date</th>
                       <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Station</th>
-                      <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Gallons</th>
-                      <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Price/Gal</th>
+                      <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Liters</th>
+                      <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Price/L</th>
                       <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Total</th>
                       <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 pr-5">Odometer</th>
                     </tr>
@@ -1120,13 +1121,13 @@ export default function TruckDetailPage() {
                           {log.station || <span className="text-slate-400">&mdash;</span>}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-900 text-right">
-                          {log.gallons.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          {gallonsToLiters(log.gallons).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 text-right">
-                          ${log.pricePerGallon.toFixed(2)}
+                          ₹{(log.pricePerGallon / GALLONS_TO_LITERS).toFixed(2)}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-slate-900 text-right">
-                          ${log.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ₹{log.totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 text-right pr-5">
                           {log.odometer != null ? log.odometer.toLocaleString() : <span className="text-slate-400">&mdash;</span>}
@@ -1179,7 +1180,7 @@ export default function TruckDetailPage() {
                     </div>
                     <div className="text-right text-sm">
                       {policy.premium != null && (
-                        <p className="font-semibold text-slate-900">${policy.premium.toLocaleString(undefined, { minimumFractionDigits: 2 })}<span className="text-slate-400 font-normal">/yr</span></p>
+                        <p className="font-semibold text-slate-900">₹{policy.premium.toLocaleString('en-IN', { minimumFractionDigits: 2 })}<span className="text-slate-400 font-normal">/yr</span></p>
                       )}
                       <p className="text-slate-500">Expires {new Date(policy.expiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                     </div>
@@ -1201,7 +1202,7 @@ export default function TruckDetailPage() {
                             </div>
                             <div className="text-right shrink-0 ml-4">
                               {claim.amount != null && (
-                                <p className="text-sm font-medium text-slate-900">${claim.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                                <p className="text-sm font-medium text-slate-900">₹{claim.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                               )}
                               <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium mt-1 ${
                                 claim.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700' :
@@ -1372,20 +1373,20 @@ export default function TruckDetailPage() {
             <form onSubmit={handleFuelSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Gallons</label>
-                  <input type="number" step="0.01" required placeholder="120.50" value={fuelForm.gallons}
-                    onChange={(e) => setFuelForm({ ...fuelForm, gallons: e.target.value })} className={inputCls} />
+                  <label className={labelCls}>Liters</label>
+                  <input type="number" step="0.01" required placeholder="456" value={fuelForm.liters}
+                    onChange={(e) => setFuelForm({ ...fuelForm, liters: e.target.value })} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Price / Gallon ($)</label>
-                  <input type="number" step="0.01" required placeholder="3.85" value={fuelForm.pricePerGallon}
-                    onChange={(e) => setFuelForm({ ...fuelForm, pricePerGallon: e.target.value })} className={inputCls} />
+                  <label className={labelCls}>Price / Liter (₹)</label>
+                  <input type="number" step="0.01" required placeholder="90" value={fuelForm.pricePerLiter}
+                    onChange={(e) => setFuelForm({ ...fuelForm, pricePerLiter: e.target.value })} className={inputCls} />
                 </div>
               </div>
               {fuelTotalCost && (
                 <div className="rounded-xl bg-slate-50 px-4 py-3 flex items-center justify-between">
                   <span className="text-sm text-slate-600">Total Cost</span>
-                  <span className="text-lg font-bold text-slate-900">${fuelTotalCost}</span>
+                  <span className="text-lg font-bold text-slate-900">₹{fuelTotalCost}</span>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4">
@@ -1447,15 +1448,15 @@ export default function TruckDetailPage() {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className={labelCls}>Premium ($)</label>
+                  <label className={labelCls}>Premium (₹)</label>
                   <input type="number" step="0.01" required value={insuranceForm.premium} onChange={(e) => setInsuranceForm({ ...insuranceForm, premium: e.target.value })} placeholder="2400" className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Deductible ($)</label>
+                  <label className={labelCls}>Deductible (₹)</label>
                   <input type="number" step="0.01" required value={insuranceForm.deductible} onChange={(e) => setInsuranceForm({ ...insuranceForm, deductible: e.target.value })} placeholder="1000" className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Coverage Limit ($)</label>
+                  <label className={labelCls}>Coverage Limit (₹)</label>
                   <input type="number" step="0.01" required value={insuranceForm.coverageLimit} onChange={(e) => setInsuranceForm({ ...insuranceForm, coverageLimit: e.target.value })} placeholder="100000" className={inputCls} />
                 </div>
               </div>

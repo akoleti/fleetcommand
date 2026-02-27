@@ -1,3 +1,9 @@
+import * as dotenv from 'dotenv'
+import * as path from 'path'
+
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') })
+dotenv.config({ path: path.resolve(process.cwd(), '.env') })
+
 import {
   PrismaClient, UserRole, TruckStatus, DriverStatus, TripStatus,
   MaintenanceType, MaintenanceStatus, AlertType, AlertSeverity,
@@ -7,14 +13,14 @@ import * as bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
-const TRUCK_MAKES = ['Freightliner', 'Peterbilt', 'Kenworth', 'Volvo', 'Mack', 'International']
+const TRUCK_MAKES = ['Tata', 'Ashok Leyland', 'Mahindra', 'Eicher', 'BharatBenz', 'Volvo Eicher']
 const TRUCK_MODELS: Record<string, string[]> = {
-  Freightliner: ['Cascadia', 'M2 106', 'Columbia'],
-  Peterbilt: ['579', '389', '567'],
-  Kenworth: ['T680', 'W990', 'T880'],
-  Volvo: ['VNL 860', 'VNR 640', 'VHD'],
-  Mack: ['Anthem', 'Pinnacle', 'Granite'],
-  International: ['LT', 'HX', 'RH'],
+  Tata: ['Signa', 'Prima', 'Ultra', 'LPT', 'LPT 3118'],
+  'Ashok Leyland': ['Dost', 'Partner', 'Boss', 'Captain', 'Ecomet'],
+  Mahindra: ['Blazo', 'Blazo X', 'Furio', 'Truxo'],
+  Eicher: ['Pro', 'Pro 6031', 'Pro 6042', 'Skyline'],
+  BharatBenz: ['3128R', '4828R', '3128T', '1617R'],
+  'Volvo Eicher': ['Pro 6031', 'Pro 6042', 'Pro 2115'],
 }
 
 function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)] }
@@ -31,50 +37,50 @@ function generateVIN() {
 function generatePlate() {
   const L = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   const N = '0123456789'
-  return `${L[randInt(0,25)]}${L[randInt(0,25)]}${L[randInt(0,25)]}-${N[randInt(0,9)]}${N[randInt(0,9)]}${N[randInt(0,9)]}${N[randInt(0,9)]}`
+  return `TS 02 ${L[randInt(0, 25)]}${L[randInt(0, 25)]} ${N[randInt(0, 9)]}${N[randInt(0, 9)]}${N[randInt(0, 9)]}${N[randInt(0, 9)]}`
 }
 
 const CITIES = [
-  { name: 'Houston', lat: 29.7604, lng: -95.3698 },
-  { name: 'Dallas', lat: 32.7767, lng: -96.7970 },
-  { name: 'Austin', lat: 30.2672, lng: -97.7431 },
-  { name: 'San Antonio', lat: 29.4241, lng: -98.4936 },
-  { name: 'Fort Worth', lat: 32.7555, lng: -97.3308 },
-  { name: 'El Paso', lat: 31.7619, lng: -106.4850 },
-  { name: 'Lubbock', lat: 33.5779, lng: -101.8552 },
-  { name: 'Amarillo', lat: 35.2220, lng: -101.8313 },
-  { name: 'Corpus Christi', lat: 27.8006, lng: -97.3964 },
-  { name: 'Laredo', lat: 27.5036, lng: -99.5076 },
-  { name: 'Midland', lat: 31.9973, lng: -102.0779 },
-  { name: 'Beaumont', lat: 30.0802, lng: -94.1266 },
+  { name: 'Karimnagar', lat: 18.4386, lng: 79.1288 },
+  { name: 'Warangal', lat: 17.9689, lng: 79.5941 },
+  { name: 'Nizamabad', lat: 18.6715, lng: 78.0948 },
+  { name: 'Sircilla', lat: 18.3885, lng: 78.8104 },
+  { name: 'Jagtial', lat: 18.7897, lng: 78.9167 },
+  { name: 'Peddapalli', lat: 18.6167, lng: 79.3833 },
+  { name: 'Nirmal', lat: 18.9500, lng: 78.2000 },
+  { name: 'Ramagundam', lat: 18.7550, lng: 79.4740 },
+  { name: 'Mancherial', lat: 18.8700, lng: 79.4300 },
+  { name: 'Hyderabad', lat: 17.3850, lng: 78.4867 },
+  { name: 'Khammam', lat: 17.2477, lng: 80.1437 },
+  { name: 'Adilabad', lat: 19.6667, lng: 78.5333 },
 ]
 
-const STREETS = ['Main St', 'Commerce Dr', 'Industrial Blvd', 'Highway 10', 'Freight Rd', 'Depot Ave', 'Warehouse Ln', 'Terminal Way']
+const STREETS = ['Main Road', 'NH 563', 'Industrial Area', 'Godavarikhani Road', 'Depot Road', 'Warehouse Lane', 'Transport Nagar', 'RTC Depot Road']
 
 const DRIVER_NAMES = [
-  'James Rodriguez', 'Maria Garcia', 'John Smith', 'Sarah Johnson', 'Michael Brown',
-  'Emily Davis', 'David Wilson', 'Lisa Anderson', 'Robert Taylor', 'Jennifer Thomas',
-  'William Jackson', 'Amanda White', 'Joseph Harris', 'Michelle Martin', 'Charles Thompson',
-  'Ashley Garcia', 'Christopher Martinez', 'Jessica Robinson', 'Daniel Clark', 'Stephanie Lewis',
-  'Matthew Lee', 'Nicole Walker', 'Andrew Hall', 'Samantha Allen', 'Joshua Young',
-  'Elizabeth King', 'Kevin Wright', 'Brittany Scott', 'Ryan Green', 'Lauren Adams',
+  'Rajesh Kumar', 'Suresh Reddy', 'Venkatesh Goud', 'Murali Sharma', 'Prakash Naidu',
+  'Lakshmi Devi', 'Anil Kumar', 'Srinivas Rao', 'Ramesh Patel', 'Kiran Reddy',
+  'Vijay Bhaskar', 'Mahesh Yadav', 'Chandra Sekhar', 'Nageshwar Rao', 'Satish Kumar',
+  'Ravi Teja', 'Siva Prasad', 'Madhu Sudhan', 'Krishna Mohan', 'Raju Goud',
+  'Babu Rao', 'Narayana Swamy', 'Venkat Rao', 'Subba Rao', 'Hanumanthu',
+  'Ramakrishna', 'Santhosh Kumar', 'Gopal Reddy', 'Mohan Reddy', 'Srinivas Goud',
 ]
 
 const MAINTENANCE_DESCRIPTIONS: Record<string, string[]> = {
-  OIL_CHANGE: ['Full synthetic oil change', 'Standard oil change + filter', 'Oil change with multi-point inspection'],
-  TIRE_ROTATION: ['Tire rotation and balance', 'Tire rotation + alignment check', 'Tire rotation, replaced 2 worn tires'],
-  BRAKE_SERVICE: ['Brake pad replacement (front)', 'Full brake service (all axles)', 'Brake inspection + rotor resurfacing'],
-  ENGINE_REPAIR: ['EGR valve replacement', 'Turbocharger rebuild', 'Fuel injector cleaning'],
-  TRANSMISSION: ['Transmission fluid change', 'Clutch replacement', 'Transmission rebuild'],
-  ELECTRICAL: ['Alternator replacement', 'Starter motor repair', 'Wiring harness repair'],
-  BODY_WORK: ['Side panel repair from scrape', 'Bumper replacement', 'Windshield replacement'],
-  INSPECTION: ['DOT annual inspection', 'Pre-trip safety inspection', 'State emissions inspection'],
-  OTHER: ['AC compressor replacement', 'Exhaust system repair', 'Fifth wheel maintenance'],
+  OIL_CHANGE: ['Engine oil change', 'Oil change + filter replacement', 'Full service oil change'],
+  TIRE_ROTATION: ['Tyre rotation and balance', 'Tyre rotation + alignment', 'Tyre replacement (2 worn)'],
+  BRAKE_SERVICE: ['Brake pad replacement (front)', 'Full brake service', 'Brake inspection + disc resurfacing'],
+  ENGINE_REPAIR: ['EGR valve replacement', 'Turbocharger service', 'Fuel injector cleaning'],
+  TRANSMISSION: ['Gear oil change', 'Clutch plate replacement', 'Transmission overhaul'],
+  ELECTRICAL: ['Alternator replacement', 'Starter motor repair', 'Battery and wiring repair'],
+  BODY_WORK: ['Body panel repair', 'Bumper replacement', 'Windshield replacement'],
+  INSPECTION: ['Fitness certificate renewal', 'PUC inspection', 'RTO annual inspection'],
+  OTHER: ['AC compressor replacement', 'Exhaust repair', 'Fifth wheel maintenance'],
 }
 
-const FUEL_STATIONS = ['Pilot Flying J', "Love's Travel Stop", 'TA Petro', 'Casey\'s', 'Buc-ee\'s', 'QuikTrip', 'Sheetz', 'RaceTrac']
+const FUEL_STATIONS = ['Indian Oil', 'Bharat Petroleum', 'Hindustan Petroleum', 'Reliance', 'Shell India', 'Essar', 'HP Petrol Pump Karimnagar', 'BPCL Sircilla']
 
-function addr(city: typeof CITIES[0]) { return `${randInt(100, 9999)} ${pick(STREETS)}, ${city.name}, TX` }
+function addr(city: typeof CITIES[0]) { return `${randInt(1, 999)} ${pick(STREETS)}, ${city.name}, Telangana ${randInt(505001, 505530)}` }
 
 async function main() {
   console.log('🌱 Starting seed...\n')
@@ -100,8 +106,8 @@ async function main() {
   console.log('🏢 Creating organization...')
   const org = await prisma.organization.create({
     data: {
-      name: 'Texas Freight Co.',
-      settings: { timezone: 'America/Chicago', idleThresholdMinutes: 240, speedLimitMph: 75, defaultFuelUnit: 'gallons' },
+      name: 'Karimnagar Transport & Logistics',
+      settings: { timezone: 'Asia/Kolkata', idleThresholdMinutes: 240, speedLimitKmh: 80, defaultFuelUnit: 'liters', defaultCurrency: 'INR' },
     },
   })
 
@@ -110,13 +116,13 @@ async function main() {
   const hash = await bcrypt.hash('password123', 12)
 
   const owner = await prisma.user.create({
-    data: { email: 'owner@texasfreight.com', passwordHash: hash, name: 'John Owner', role: UserRole.OWNER, organizationId: org.id, phone: '+15551234567' },
+    data: { email: 'owner@karimnagartransport.in', passwordHash: hash, name: 'Ramesh Agarwal', role: UserRole.OWNER, organizationId: org.id, phone: '+919876543210' },
   })
   const manager = await prisma.user.create({
-    data: { email: 'manager@texasfreight.com', passwordHash: hash, name: 'Jane Manager', role: UserRole.MANAGER, organizationId: org.id, phone: '+15552345678' },
+    data: { email: 'manager@karimnagartransport.in', passwordHash: hash, name: 'Lakshmi Reddy', role: UserRole.MANAGER, organizationId: org.id, phone: '+919876543211' },
   })
   await prisma.user.create({
-    data: { email: 'driver@texasfreight.com', passwordHash: hash, name: 'Bob Driver', role: UserRole.DRIVER, organizationId: org.id, phone: '+15553456789' },
+    data: { email: 'driver@karimnagartransport.in', passwordHash: hash, name: 'Rajesh Kumar', role: UserRole.DRIVER, organizationId: org.id, phone: '+919876543212' },
   })
 
   // ── Drivers ────────────────────────────────────────────────
@@ -129,9 +135,9 @@ async function main() {
         data: {
           organizationId: org.id,
           name,
-          licenseNumber: `TX${String(100000 + i).padStart(7, '0')}`,
+          licenseNumber: `TS02${String(2018000000 + i).slice(-10)}`,
           licenseExpiry: daysFromNow(expiresIn),
-          phone: `+1555${String(1000000 + i).slice(-7)}`,
+          phone: `+91${String(9876500000 + i).slice(-10)}`,
           status: pick(driverStatuses),
         },
       })
@@ -141,11 +147,11 @@ async function main() {
   // ── Trucks ─────────────────────────────────────────────────
   console.log('🚛 Creating 30 trucks...')
   const TRUCK_NAMES = [
-    'Big Red', 'Thunder', 'Road King', 'Maverick', 'Iron Horse',
-    'Lone Star', 'Blaze', 'Titan', 'Ranger', 'Shadow',
-    'Bullet', 'Storm', 'Eagle', 'Patriot', 'Diesel Dan',
+    'Red Bull', 'Thunder', 'Road King', 'Maverick', 'Iron Horse',
+    'Telangana Express', 'Blaze', 'Titan', 'Ranger', 'Shadow',
+    'Bullet', 'Storm', 'Eagle', 'Patriot', 'Godavari',
     'Midnight', 'Viper', 'Phoenix', 'Summit', 'Atlas',
-    'Ghost', 'Apache', 'Nomad', 'Stallion', 'Frontier',
+    'Ghost', 'Manjeera', 'Nomad', 'Stallion', 'Frontier',
     'Rebel', 'Canyon', 'Mustang', 'Dakota', 'Ironclad',
   ]
   const truckStatuses = [TruckStatus.ACTIVE, TruckStatus.ACTIVE, TruckStatus.ACTIVE, TruckStatus.IDLE, TruckStatus.MAINTENANCE, TruckStatus.ACTIVE]
@@ -163,6 +169,7 @@ async function main() {
           year: randInt(2018, 2025),
           status: pick(truckStatuses),
           currentDriverId: drivers[i]?.id,
+          fuelTankCapacityGallons: randInt(40, 55),
         },
       })
     })
@@ -178,7 +185,7 @@ async function main() {
           truckId: truck.id,
           latitude: city.lat + randFloat(-0.15, 0.15),
           longitude: city.lng + randFloat(-0.15, 0.15),
-          speed: truck.status === TruckStatus.ACTIVE ? randFloat(35, 72) : 0,
+          speed: truck.status === TruckStatus.ACTIVE ? randFloat(40, 80) : 0,
           heading: randFloat(0, 360),
           fuelLevel: randFloat(15, 98),
           ignitionOn: truck.status === TruckStatus.ACTIVE || truck.status === TruckStatus.IDLE,
@@ -255,7 +262,7 @@ async function main() {
     const proof = await prisma.deliveryProof.create({
       data: {
         tripId: trip.id,
-        recipientName: pick(['Mike Johnson', 'Susan Lee', 'Carlos Ramirez', 'Angela Chen', 'Tom Baker', 'Patricia Wood', 'Warehouse Manager', 'Front Desk', 'Loading Dock #3']),
+        recipientName: pick(['Srinivas Reddy', 'Lakshmi Devi', 'Ramesh Kumar', 'Anitha Rao', 'Prakash Goud', 'Venkatesh Sharma', 'Godown Manager', 'Front Office', 'Loading Bay #2']),
         notes: pick([null, 'Left at loading dock per instructions', 'Signed by warehouse supervisor', 'Delivered to back entrance', 'Recipient confirmed quantity', null]),
         latitude: city.lat + randFloat(-0.02, 0.02),
         longitude: city.lng + randFloat(-0.02, 0.02),
@@ -297,8 +304,8 @@ async function main() {
           type,
           status: isCompleted ? MaintenanceStatus.COMPLETED : pick([MaintenanceStatus.SCHEDULED, MaintenanceStatus.IN_PROGRESS]),
           description: pick(MAINTENANCE_DESCRIPTIONS[type] || ['General maintenance']),
-          cost: isCompleted ? randFloat(85, 3500) : null,
-          vendor: pick(['Quick Lube Express', 'Truck Pro Service', 'Fleet Maintenance Inc.', 'Highway Diesel Repair', 'Lone Star Truck Care', 'Texas Fleet Service']),
+          cost: isCompleted ? randFloat(1500, 45000) : null,
+          vendor: pick(['Karimnagar Auto Works', 'Warangal Truck Service', 'Sircilla Fleet Care', 'Jagtial Motors', 'Ramagundam Diesel Service', 'Telangana Transport Repairs']),
           scheduledDate,
           completedDate: isCompleted ? new Date(scheduledDate.getTime() + randInt(1, 5) * 86400000) : null,
           nextDueDate: daysFromNow(randInt(30, 240)),
@@ -316,13 +323,13 @@ async function main() {
   console.log('⛽ Creating fuel logs...')
   let fuelCount = 0
   for (const truck of trucks) {
-    let odo = randInt(80000, 300000)
+    let odo = randInt(50000, 250000)
     const entries = randInt(5, 15)
     const logs = []
     for (let f = 0; f < entries; f++) {
       odo += randInt(200, 800)
-      const gallons = randFloat(40, 160)
-      const ppg = randFloat(3.05, 4.85)
+      const gallons = randFloat(40, 120)
+      const ppg = randFloat(250, 380)
       const city = pick(CITIES)
       logs.push({
         truckId: truck.id,
@@ -352,12 +359,12 @@ async function main() {
       data: {
         organizationId: org.id,
         truckId: truck.id,
-        provider: pick(['State Farm Commercial', 'Progressive Fleet', 'Geico Business', 'Allstate Trucking', 'Liberty Mutual Commercial', 'Nationwide Fleet']),
-        policyNumber: `POL-${randInt(100000, 999999)}`,
-        coverageType: pick(['Liability', 'Full Coverage', 'Comprehensive', 'Cargo Insurance', 'Physical Damage']),
-        premium: randFloat(800, 3500),
-        deductible: pick([500, 1000, 1500, 2500]),
-        coverageLimit: pick([100000, 250000, 500000, 1000000]),
+        provider: pick(['ICICI Lombard', 'Bajaj Allianz', 'New India Assurance', 'United India', 'Oriental Insurance', 'National Insurance']),
+        policyNumber: `MTPL/TS/2024/${randInt(100000, 999999)}`,
+        coverageType: pick(['Third Party Liability', 'Comprehensive', 'Package Policy', 'Cargo Insurance', 'Act Policy']),
+        premium: randFloat(15000, 85000),
+        deductible: pick([5000, 10000, 15000, 25000]),
+        coverageLimit: pick([750000, 1500000, 2500000, 5000000]),
         startDate: daysAgo(startDays),
         expiryDate: daysFromNow(expiryDays),
         isActive: true,
@@ -376,19 +383,19 @@ async function main() {
       await prisma.insuranceClaim.create({
         data: {
           policyId: policy.id,
-          claimNumber: `CLM-${randInt(10000, 99999)}`,
+          claimNumber: `CLM/TS/${randInt(2023, 2024)}/${randInt(10000, 99999)}`,
           incidentDate: daysAgo(randInt(10, 120)),
           description: pick([
-            'Minor fender bender at loading dock',
-            'Windshield cracked by road debris',
-            'Side mirror damaged in parking lot',
-            'Cargo water damage during transit',
-            'Tire blowout caused undercarriage damage',
-            'Rear bumper collision at truck stop',
-            'Vandalism at overnight parking',
-            'Hail damage during storm',
+            'Minor collision at godown loading area',
+            'Windshield cracked by road debris on NH 563',
+            'Side mirror damaged in Karimnagar market',
+            'Cargo water damage during monsoon transit',
+            'Tyre burst caused undercarriage damage',
+            'Rear bumper collision at Sircilla truck stop',
+            'Vandalism at overnight parking in Warangal',
+            'Hail damage during storm near Nizamabad',
           ]),
-          amount: randFloat(500, 15000),
+          amount: randFloat(5000, 150000),
           status: pick([ClaimStatus.PENDING, ClaimStatus.PENDING, ClaimStatus.APPROVED, ClaimStatus.PAID, ClaimStatus.DENIED]),
           notes: pick([null, 'Photos submitted', 'Adjuster assigned', 'Awaiting police report', 'Repair estimate received', null]),
           filedAt: daysAgo(randInt(5, 90)),
@@ -402,21 +409,21 @@ async function main() {
   // ── Alerts (diverse types and severities) ──────────────────
   console.log('🚨 Creating alerts...')
   const alertDefs: { type: AlertType; severity: AlertSeverity; title: string; msg: (plate: string) => string }[] = [
-    { type: AlertType.IDLE_ALERT, severity: AlertSeverity.CRITICAL, title: 'Truck Idle > 4 Hours', msg: p => `${p} has been idle for 5 hours 23 minutes at Dallas, TX` },
-    { type: AlertType.IDLE_ALERT, severity: AlertSeverity.WARNING, title: 'Truck Idle > 4 Hours', msg: p => `${p} has been idle for 4 hours 12 minutes at Houston, TX` },
-    { type: AlertType.SPEEDING, severity: AlertSeverity.WARNING, title: 'Speeding Detected', msg: p => `${p} clocked at 82 mph in a 70 mph zone on I-35` },
-    { type: AlertType.SPEEDING, severity: AlertSeverity.CRITICAL, title: 'Severe Speeding', msg: p => `${p} clocked at 91 mph in a 65 mph zone near Austin, TX` },
-    { type: AlertType.LOW_FUEL, severity: AlertSeverity.WARNING, title: 'Low Fuel Warning', msg: p => `${p} fuel level at 12% — nearest station 45 miles away` },
+    { type: AlertType.IDLE_ALERT, severity: AlertSeverity.CRITICAL, title: 'Truck Idle > 4 Hours', msg: p => `${p} has been idle for 5 hours 23 minutes at Karimnagar` },
+    { type: AlertType.IDLE_ALERT, severity: AlertSeverity.WARNING, title: 'Truck Idle > 4 Hours', msg: p => `${p} has been idle for 4 hours 12 minutes at Warangal` },
+    { type: AlertType.SPEEDING, severity: AlertSeverity.WARNING, title: 'Speeding Detected', msg: p => `${p} clocked at 95 km/h in a 80 km/h zone on NH 563` },
+    { type: AlertType.SPEEDING, severity: AlertSeverity.CRITICAL, title: 'Severe Speeding', msg: p => `${p} clocked at 110 km/h in a 60 km/h zone near Sircilla` },
+    { type: AlertType.LOW_FUEL, severity: AlertSeverity.WARNING, title: 'Low Fuel Warning', msg: p => `${p} fuel level at 12% — nearest pump 35 km away` },
     { type: AlertType.LOW_FUEL, severity: AlertSeverity.CRITICAL, title: 'Critical Fuel Level', msg: p => `${p} fuel level at 5% — immediate refueling required` },
-    { type: AlertType.MAINTENANCE_DUE, severity: AlertSeverity.INFO, title: 'Scheduled Maintenance Due', msg: p => `${p} oil change overdue by 1,200 miles` },
+    { type: AlertType.MAINTENANCE_DUE, severity: AlertSeverity.INFO, title: 'Scheduled Maintenance Due', msg: p => `${p} oil change overdue by 1,200 km` },
     { type: AlertType.MAINTENANCE_DUE, severity: AlertSeverity.WARNING, title: 'Maintenance Overdue', msg: p => `${p} brake inspection overdue by 3 weeks` },
     { type: AlertType.INSURANCE_EXPIRY_WARNING, severity: AlertSeverity.WARNING, title: 'Insurance Expiring Soon', msg: p => `Insurance for ${p} expires in 21 days` },
     { type: AlertType.INSURANCE_EXPIRY_CRITICAL, severity: AlertSeverity.CRITICAL, title: 'Insurance Expires in 5 Days', msg: p => `Insurance for ${p} expires in 5 days — renew immediately` },
-    { type: AlertType.LICENSE_EXPIRY, severity: AlertSeverity.WARNING, title: 'Driver License Expiring', msg: _ => `Driver James Rodriguez license expires in 18 days` },
-    { type: AlertType.GEOFENCE_EXIT, severity: AlertSeverity.INFO, title: 'Geofence Exit', msg: p => `${p} exited the Dallas metro service area` },
-    { type: AlertType.GEOFENCE_ENTER, severity: AlertSeverity.INFO, title: 'Geofence Enter', msg: p => `${p} entered the Houston depot zone` },
+    { type: AlertType.LICENSE_EXPIRY, severity: AlertSeverity.WARNING, title: 'Driver License Expiring', msg: _ => `Driver Rajesh Kumar license expires in 18 days` },
+    { type: AlertType.GEOFENCE_EXIT, severity: AlertSeverity.INFO, title: 'Geofence Exit', msg: p => `${p} exited the Karimnagar district service area` },
+    { type: AlertType.GEOFENCE_ENTER, severity: AlertSeverity.INFO, title: 'Geofence Enter', msg: p => `${p} entered the Warangal depot zone` },
     { type: AlertType.UNAUTHORIZED_MOVEMENT, severity: AlertSeverity.CRITICAL, title: 'Unauthorized Movement', msg: p => `${p} ignition on and moving outside scheduled hours (2:47 AM)` },
-    { type: AlertType.SOS, severity: AlertSeverity.CRITICAL, title: 'SOS Emergency', msg: _ => `Driver Maria Garcia triggered SOS near Laredo, TX` },
+    { type: AlertType.SOS, severity: AlertSeverity.CRITICAL, title: 'SOS Emergency', msg: _ => `Driver Suresh Reddy triggered SOS near Jagtial` },
   ]
 
   let alertCount = 0
@@ -444,7 +451,7 @@ async function main() {
 
   // ── Summary ────────────────────────────────────────────────
   console.log('\n✅ Seed completed!')
-  console.log(`   🏢 1 organization (Texas Freight Co.)`)
+  console.log(`   🏢 1 organization (Karimnagar Transport & Logistics)`)
   console.log(`   👤 3 users (owner/manager/driver — password: password123)`)
   console.log(`   🚚 ${drivers.length} drivers (3 with licenses expiring soon)`)
   console.log(`   🚛 ${trucks.length} trucks`)
@@ -455,7 +462,7 @@ async function main() {
   console.log(`   📋 ${policies.length} insurance policies (~6 expiring soon)`)
   console.log(`   📄 ${claimCount} insurance claims`)
   console.log(`   🚨 ${alertCount} alerts (mixed severities, some acknowledged)`)
-  console.log(`\n   Login: owner@texasfreight.com / password123`)
+  console.log(`\n   Login: owner@karimnagartransport.in / password123`)
 }
 
 main()

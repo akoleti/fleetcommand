@@ -59,7 +59,7 @@ const formatDate = (dateStr: string | undefined | null) => {
 }
 
 const formatCurrency = (amount: number | null | undefined) =>
-  amount != null ? `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'
+  amount != null ? `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'
 
 export default function MaintenanceDetailPage() {
   const params = useParams()

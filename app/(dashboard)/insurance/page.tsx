@@ -163,7 +163,7 @@ export default function InsurancePage() {
     new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
   const formatCurrency = (amount: number) =>
-    `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+    `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 
   const daysUntilExpiry = (dateStr: string) => {
     const diff = new Date(dateStr).getTime() - Date.now()
@@ -559,7 +559,7 @@ export default function InsurancePage() {
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Premium ($)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Premium (₹)</label>
                   <input type="number" step="0.01" required placeholder="1200" value={modalForm.premium}
                     onChange={(e) => setModalForm({ ...modalForm, premium: e.target.value })}
                     className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500" />
@@ -571,7 +571,7 @@ export default function InsurancePage() {
                     className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Coverage Limit ($)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Coverage Limit (₹)</label>
                   <input type="number" step="0.01" required placeholder="500000" value={modalForm.coverageLimit}
                     onChange={(e) => setModalForm({ ...modalForm, coverageLimit: e.target.value })}
                     className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500" />

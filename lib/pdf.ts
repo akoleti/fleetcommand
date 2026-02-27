@@ -6,9 +6,10 @@
  */
 
 import { prisma } from '@/lib/db'
+import { gallonsToLiters, GALLONS_TO_LITERS } from '@/lib/format'
 
 function formatCurrency(amount: number): string {
-  return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 function formatDate(date: Date): string {
@@ -124,9 +125,9 @@ export async function generateFleetReport(
     return acc
   }, {})
 
-  const totalGallons = fuelLogs.reduce((s, f) => s + f.gallons, 0)
+  const totalLiters = gallonsToLiters(fuelLogs.reduce((s, f) => s + f.gallons, 0))
   const totalFuelCost = fuelLogs.reduce((s, f) => s + f.totalCost, 0)
-  const avgPrice = fuelLogs.length > 0 ? fuelLogs.reduce((s, f) => s + f.pricePerGallon, 0) / fuelLogs.length : 0
+  const avgPricePerLiter = totalLiters > 0 ? totalFuelCost / totalLiters : 0
 
   const maintenanceByType = maintenance.reduce<Record<string, number>>((acc, m) => {
     acc[m.type] = (acc[m.type] || 0) + 1
@@ -163,9 +164,9 @@ export async function generateFleetReport(
 
   // Fuel Summary
   body += `<h2>Fuel Summary</h2><div class="grid">`
-  body += statCard('Total Gallons', formatNumber(totalGallons))
+  body += statCard('Total Liters', formatNumber(totalLiters))
   body += statCard('Total Cost', formatCurrency(totalFuelCost))
-  body += statCard('Avg Price/Gal', formatCurrency(avgPrice))
+  body += statCard('Avg ₹/L', formatCurrency(avgPricePerLiter))
   body += statCard('Fill-ups', fuelLogs.length.toString())
   body += `</div>`
 
@@ -280,20 +281,20 @@ export async function generateTruckReport(
   }
 
   // Fuel
-  const totalGallons = fuelLogs.reduce((s, f) => s + f.gallons, 0)
+  const totalLiters = gallonsToLiters(fuelLogs.reduce((s, f) => s + f.gallons, 0))
   const totalFuelCost = fuelLogs.reduce((s, f) => s + f.totalCost, 0)
   body += `<h2>Fuel Logs (${fuelLogs.length})</h2><div class="grid">`
-  body += statCard('Total Gallons', formatNumber(totalGallons))
+  body += statCard('Total Liters', formatNumber(totalLiters))
   body += statCard('Total Cost', formatCurrency(totalFuelCost))
   body += `</div>`
   if (fuelLogs.length > 0) {
-    body += `<table><thead><tr><th>Date</th><th>Station</th><th class="text-right">Gallons</th><th class="text-right">Price/Gal</th><th class="text-right">Total</th><th class="text-right">Odometer</th></tr></thead><tbody>`
+    body += `<table><thead><tr><th>Date</th><th>Station</th><th class="text-right">Liters</th><th class="text-right">Price/L</th><th class="text-right">Total</th><th class="text-right">Odometer</th></tr></thead><tbody>`
     fuelLogs.forEach((f) => {
       body += `<tr>
         <td>${formatDate(f.fueledAt)}</td>
         <td>${f.station || '—'}</td>
-        <td class="text-right">${formatNumber(f.gallons)}</td>
-        <td class="text-right">${formatCurrency(f.pricePerGallon)}</td>
+        <td class="text-right">${formatNumber(gallonsToLiters(f.gallons))}</td>
+        <td class="text-right">${formatCurrency(f.pricePerGallon / GALLONS_TO_LITERS)}</td>
         <td class="text-right">${formatCurrency(f.totalCost)}</td>
         <td class="text-right">${f.odometer.toLocaleString()}</td>
       </tr>`
@@ -341,27 +342,27 @@ export async function generateFuelReport(
     }),
   ])
 
-  const totalGallons = fuelLogs.reduce((s, f) => s + f.gallons, 0)
+  const totalLiters = gallonsToLiters(fuelLogs.reduce((s, f) => s + f.gallons, 0))
   const totalCost = fuelLogs.reduce((s, f) => s + f.totalCost, 0)
-  const avgPrice = fuelLogs.length > 0 ? fuelLogs.reduce((s, f) => s + f.pricePerGallon, 0) / fuelLogs.length : 0
+  const avgPricePerLiter = totalLiters > 0 ? totalCost / totalLiters : 0
 
   // Per-truck breakdown
-  const byTruck = new Map<string, { plate: string; label: string; gallons: number; cost: number; count: number }>()
+  const byTruck = new Map<string, { plate: string; label: string; liters: number; cost: number; count: number }>()
   fuelLogs.forEach((f) => {
     const key = f.truck.id
-    const existing = byTruck.get(key) || { plate: f.truck.licensePlate, label: `${f.truck.make} ${f.truck.model}`, gallons: 0, cost: 0, count: 0 }
-    existing.gallons += f.gallons
+    const existing = byTruck.get(key) || { plate: f.truck.licensePlate, label: `${f.truck.make} ${f.truck.model}`, liters: 0, cost: 0, count: 0 }
+    existing.liters += gallonsToLiters(f.gallons)
     existing.cost += f.totalCost
     existing.count += 1
     byTruck.set(key, existing)
   })
 
   // Station analysis
-  const byStation = new Map<string, { gallons: number; cost: number; count: number }>()
+  const byStation = new Map<string, { liters: number; cost: number; count: number }>()
   fuelLogs.forEach((f) => {
     const station = f.station || 'Unknown'
-    const existing = byStation.get(station) || { gallons: 0, cost: 0, count: 0 }
-    existing.gallons += f.gallons
+    const existing = byStation.get(station) || { liters: 0, cost: 0, count: 0 }
+    existing.liters += gallonsToLiters(f.gallons)
     existing.cost += f.totalCost
     existing.count += 1
     byStation.set(station, existing)
@@ -372,22 +373,22 @@ export async function generateFuelReport(
   // Overall
   body += `<h2>Overall Summary</h2><div class="grid">`
   body += statCard('Fill-ups', fuelLogs.length.toString())
-  body += statCard('Total Gallons', formatNumber(totalGallons))
+  body += statCard('Total Liters', formatNumber(totalLiters))
   body += statCard('Total Cost', formatCurrency(totalCost))
-  body += statCard('Avg Price/Gal', formatCurrency(avgPrice))
+  body += statCard('Avg ₹/L', formatCurrency(avgPricePerLiter))
   body += `</div>`
 
   // Per-truck
   body += `<h2>Per-Truck Breakdown</h2>`
   if (byTruck.size > 0) {
     const sorted = [...byTruck.values()].sort((a, b) => b.cost - a.cost)
-    body += `<table><thead><tr><th>Truck</th><th>Plate</th><th class="text-right">Fill-ups</th><th class="text-right">Gallons</th><th class="text-right">Total Cost</th><th class="text-right">Avg/Fill</th></tr></thead><tbody>`
+    body += `<table><thead><tr><th>Truck</th><th>Plate</th><th class="text-right">Fill-ups</th><th class="text-right">Liters</th><th class="text-right">Total Cost</th><th class="text-right">Avg/Fill</th></tr></thead><tbody>`
     sorted.forEach((t) => {
       body += `<tr>
         <td>${t.label}</td>
         <td>${t.plate}</td>
         <td class="text-right">${t.count}</td>
-        <td class="text-right">${formatNumber(t.gallons)}</td>
+        <td class="text-right">${formatNumber(t.liters)}</td>
         <td class="text-right">${formatCurrency(t.cost)}</td>
         <td class="text-right">${formatCurrency(t.cost / t.count)}</td>
       </tr>`
@@ -401,15 +402,15 @@ export async function generateFuelReport(
   body += `<h2>Station Analysis</h2>`
   if (byStation.size > 0) {
     const sorted = [...byStation.entries()].sort((a, b) => b[1].cost - a[1].cost)
-    body += `<table><thead><tr><th>Station</th><th class="text-right">Fill-ups</th><th class="text-right">Gallons</th><th class="text-right">Total Cost</th><th class="text-right">Avg Price/Gal</th></tr></thead><tbody>`
+    body += `<table><thead><tr><th>Station</th><th class="text-right">Fill-ups</th><th class="text-right">Liters</th><th class="text-right">Total Cost</th><th class="text-right">Avg ₹/L</th></tr></thead><tbody>`
     sorted.forEach(([station, data]) => {
-      const avg = data.gallons > 0 ? data.cost / data.gallons : 0
+      const avgPerLiter = data.liters > 0 ? data.cost / data.liters : 0
       body += `<tr>
         <td>${station}</td>
         <td class="text-right">${data.count}</td>
-        <td class="text-right">${formatNumber(data.gallons)}</td>
+        <td class="text-right">${formatNumber(data.liters)}</td>
         <td class="text-right">${formatCurrency(data.cost)}</td>
-        <td class="text-right">${formatCurrency(avg)}</td>
+        <td class="text-right">${formatCurrency(avgPerLiter)}</td>
       </tr>`
     })
     body += `</tbody></table>`
@@ -418,14 +419,14 @@ export async function generateFuelReport(
   // Detailed log
   body += `<h2>Detailed Fuel Log</h2>`
   if (fuelLogs.length > 0) {
-    body += `<table><thead><tr><th>Date</th><th>Truck</th><th>Station</th><th class="text-right">Gallons</th><th class="text-right">Price/Gal</th><th class="text-right">Total</th></tr></thead><tbody>`
+    body += `<table><thead><tr><th>Date</th><th>Truck</th><th>Station</th><th class="text-right">Liters</th><th class="text-right">Price/L</th><th class="text-right">Total</th></tr></thead><tbody>`
     fuelLogs.forEach((f) => {
       body += `<tr>
         <td>${formatDate(f.fueledAt)}</td>
         <td>${f.truck.make} ${f.truck.model} (${f.truck.licensePlate})</td>
         <td>${f.station || '—'}</td>
-        <td class="text-right">${formatNumber(f.gallons)}</td>
-        <td class="text-right">${formatCurrency(f.pricePerGallon)}</td>
+        <td class="text-right">${formatNumber(gallonsToLiters(f.gallons))}</td>
+        <td class="text-right">${formatCurrency(f.pricePerGallon / GALLONS_TO_LITERS)}</td>
         <td class="text-right">${formatCurrency(f.totalCost)}</td>
       </tr>`
     })

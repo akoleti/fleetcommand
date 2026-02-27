@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/middleware/auth'
 import { prisma, handlePrismaError, getPaginationParams, createPaginatedResult } from '@/lib/db'
+import { gallonsToLiters } from '@/lib/format'
 
 interface RouteParams {
   params: Promise<{ truckId: string }>
@@ -69,12 +70,16 @@ export const GET = withAuth(async (request: NextRequest, { params }: RouteParams
       }),
     ])
 
+    const totalGallons = aggregation._sum.gallons ?? 0
+    const totalCost = aggregation._sum.totalCost ?? 0
+    const totalLiters = gallonsToLiters(totalGallons)
+    const avgPricePerLiter = totalLiters > 0 ? totalCost / totalLiters : 0
+
     const summary = {
-      totalGallons: aggregation._sum.gallons ?? 0,
-      totalCost: aggregation._sum.totalCost ?? 0,
-      avgPricePerGallon: aggregation._avg.pricePerGallon
-        ? Math.round(aggregation._avg.pricePerGallon * 1000) / 1000
-        : 0,
+      totalGallons,
+      totalCost,
+      totalLiters,
+      avgPricePerLiter: Math.round(avgPricePerLiter * 1000) / 1000,
       entries: aggregation._count,
     }
 
