@@ -231,19 +231,19 @@ export async function generateTruckReport(
   const fuelByDate = [...fuelLogs].sort(
     (a, b) => new Date(a.fueledAt).getTime() - new Date(b.fueledAt).getTime()
   )
-  let milesDriven: number | null = null
+  let kmDriven: number | null = null
   if (fuelByDate.length >= 2) {
-    milesDriven = 0
+    kmDriven = 0
     for (let i = 1; i < fuelByDate.length; i++) {
       const delta = fuelByDate[i].odometer - fuelByDate[i - 1].odometer
-      if (delta > 0) milesDriven += delta
+      if (delta > 0) kmDriven += delta
     }
   }
 
   body += `<h2>Truck History Summary</h2><div class="grid">`
   body += statCard('Drivers Who Drove', uniqueDrivers.length > 0 ? uniqueDrivers.join(', ') : 'None')
   body += statCard('Total Trips', trips.length.toString())
-  body += statCard('Miles Driven (from odometer)', milesDriven != null ? `${milesDriven.toLocaleString()} mi` : 'N/A')
+  body += statCard('Kilometers Driven (from odometer)', kmDriven != null ? `${kmDriven.toLocaleString()} km` : 'N/A')
   body += statCard('Idle Time', 'Not tracked')
   body += `</div>`
 

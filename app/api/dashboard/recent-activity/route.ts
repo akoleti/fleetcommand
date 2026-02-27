@@ -20,7 +20,7 @@ export const GET = withAuth(async (request) => {
 
     const [alerts, trips] = await Promise.all([
       prisma.alert.findMany({
-        where: { organizationId: orgId },
+        where: { organizationId: orgId, acknowledged: false },
         take: LIMIT,
         include: {
           truck: { select: { id: true, licensePlate: true, make: true, model: true } },

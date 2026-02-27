@@ -45,11 +45,11 @@ const DELIVERY_BUCKETS = [
 ]
 
 const MILEAGE_BUCKETS = [
-  { key: '0', label: '0 mi', min: 0, max: 0 },
-  { key: '1-1k', label: '1-1k mi', min: 1, max: 1000 },
-  { key: '1k-5k', label: '1k-5k mi', min: 1001, max: 5000 },
-  { key: '5k-10k', label: '5k-10k mi', min: 5001, max: 10000 },
-  { key: '10k+', label: '10k+ mi', min: 10001, max: Infinity },
+  { key: '0', label: '0 km', min: 0, max: 0 },
+  { key: '1-1k', label: '1-1k km', min: 1, max: 1000 },
+  { key: '1k-5k', label: '1k-5k km', min: 1001, max: 5000 },
+  { key: '5k-10k', label: '5k-10k km', min: 5001, max: 10000 },
+  { key: '10k+', label: '10k+ km', min: 10001, max: Infinity },
 ]
 
 const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']

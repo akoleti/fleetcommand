@@ -55,14 +55,27 @@ const statusConfig: Record<string, { bg: string; text: string; dot: string }> = 
   INACTIVE: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
 }
 
-const MAKES = ['Freightliner', 'Peterbilt', 'Kenworth', 'Volvo', 'Mack', 'International'] as const
+const MAKES = ['Tata', 'Ashok Leyland', 'Mahindra', 'Eicher', 'BharatBenz', 'Volvo Eicher', 'SML Isuzu', 'Other'] as const
+
+const TRUCK_MODELS: Record<string, string[]> = {
+  Tata: ['Signa', 'Prima', 'Ultra', 'LPT', 'LPT 3118', '407 Gold SFC', 'Ace Gold', 'Other'],
+  'Ashok Leyland': ['Dost', 'Bada Dost', 'Partner', 'Boss', 'Captain', 'Ecomet', 'Ecomet 1615', 'Other'],
+  Mahindra: ['Blazo', 'Blazo X', 'Furio', 'Truxo', 'Jeeto', 'JAYO', 'Other'],
+  Eicher: ['Pro', 'Pro 6031', 'Pro 6042', 'Pro 2049', 'Pro 3015', 'Pro 3019', 'Skyline', 'Other'],
+  BharatBenz: ['3128R', '4828R', '3128T', '1617R', '1214R', '2528R', 'Other'],
+  'Volvo Eicher': ['Pro 6031', 'Pro 6042', 'Pro 2115', 'Pro 3015', 'Other'],
+  'SML Isuzu': ['S-Cab', 'MAGNUM', 'REX', 'D-MAX', 'Other'],
+  Other: ['Other'],
+}
 
 type AddFormState = {
   name: string
   vin: string
   licensePlate: string
   make: (typeof MAKES)[number]
+  customMake: string
   model: string
+  customModel: string
   year: number
   fuelTankCapacityGallons: string
   initialFuelLevel: string
@@ -87,7 +100,8 @@ export default function TrucksPage() {
   const [totalPages, setTotalPages] = useState(1)
 
   const [showAddModal, setShowAddModal] = useState(false)
-  const [addForm, setAddForm] = useState<AddFormState>({ name: '', vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear(), fuelTankCapacityGallons: '', initialFuelLevel: '', latitude: '', longitude: '' })
+  const getDefaultModel = (make: string) => (TRUCK_MODELS[make]?.[0] ?? '')
+  const [addForm, setAddForm] = useState<AddFormState>({ name: '', vin: '', licensePlate: '', make: MAKES[0], customMake: '', model: getDefaultModel(MAKES[0]), customModel: '', year: new Date().getFullYear(), fuelTankCapacityGallons: '', initialFuelLevel: '', latitude: '', longitude: '' })
   const [addError, setAddError] = useState<string | null>(null)
   const [addSubmitting, setAddSubmitting] = useState(false)
 
@@ -166,6 +180,13 @@ export default function TrucksPage() {
     e.preventDefault()
     setAddError(null)
     setAddSubmitting(true)
+    const resolvedMake = addForm.make === 'Other' ? addForm.customMake.trim() : addForm.make
+    const resolvedModel = addForm.model === 'Other' ? addForm.customModel.trim() : addForm.model
+    if (!resolvedMake || !resolvedModel) {
+      setAddError('Please enter make and model')
+      setAddSubmitting(false)
+      return
+    }
     try {
       const token = localStorage.getItem('accessToken')
       const res = await fetch('/api/trucks', {
@@ -173,6 +194,8 @@ export default function TrucksPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           ...addForm,
+          make: resolvedMake,
+          model: resolvedModel,
           name: addForm.name.trim() || null,
           fuelTankCapacityGallons: addForm.fuelTankCapacityGallons ? Math.round(litersToGallons(parseFloat(addForm.fuelTankCapacityGallons))) : null,
           initialFuelLevel: addForm.initialFuelLevel ? parseInt(addForm.initialFuelLevel, 10) : null,
@@ -186,7 +209,7 @@ export default function TrucksPage() {
         throw new Error(body?.error || `Failed to add truck (${res.status})`)
       }
       setShowAddModal(false)
-      setAddForm({ name: '', vin: '', licensePlate: '', make: MAKES[0], model: '', year: new Date().getFullYear(), fuelTankCapacityGallons: '', initialFuelLevel: '', latitude: '', longitude: '' })
+      setAddForm({ name: '', vin: '', licensePlate: '', make: MAKES[0], customMake: '', model: getDefaultModel(MAKES[0]), customModel: '', year: new Date().getFullYear(), fuelTankCapacityGallons: '', initialFuelLevel: '', latitude: '', longitude: '' })
       fetchTrucks()
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'An error occurred')
@@ -423,7 +446,7 @@ export default function TrucksPage() {
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600 tabular-nums">
                       {truck.mileage != null
-                        ? `${truck.mileage.toLocaleString()} mi`
+                        ? `${truck.mileage.toLocaleString()} km`
                         : '-'}
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600">
@@ -565,23 +588,49 @@ export default function TrucksPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Make</label>
                   <select
                     value={addForm.make}
-                    onChange={(e) => setAddForm({ ...addForm, make: e.target.value as (typeof MAKES)[number] })}
+                    onChange={(e) => {
+                      const newMake = e.target.value as (typeof MAKES)[number]
+                      const models = TRUCK_MODELS[newMake] ?? []
+                      setAddForm({ ...addForm, make: newMake, model: models[0] ?? '' })
+                    }}
                     className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
                   >
                     {MAKES.map((m) => (
                       <option key={m} value={m}>{m}</option>
                     ))}
                   </select>
+                  {addForm.make === 'Other' && (
+                    <input
+                      type="text"
+                      required
+                      value={addForm.customMake}
+                      onChange={(e) => setAddForm({ ...addForm, customMake: e.target.value })}
+                      placeholder="Enter make"
+                      className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Model</label>
-                  <input
-                    type="text"
-                    required
+                  <select
                     value={addForm.model}
                     onChange={(e) => setAddForm({ ...addForm, model: e.target.value })}
-                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
-                  />
+                    className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                  >
+                    {(TRUCK_MODELS[addForm.make] ?? []).map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  {addForm.model === 'Other' && (
+                    <input
+                      type="text"
+                      required
+                      value={addForm.customModel}
+                      onChange={(e) => setAddForm({ ...addForm, customModel: e.target.value })}
+                      placeholder="Enter model"
+                      className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors"
+                    />
+                  )}
                 </div>
               </div>
               <div>
